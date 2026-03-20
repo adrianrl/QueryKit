@@ -29,7 +29,7 @@ public struct Query<Value: Sendable>: @preconcurrency DynamicProperty {
     }
 
     public mutating func update() {
-        observer.configureIfNeeded(
+        observer.configure(
             client: client,
             key: key,
             staleTime: staleTime,

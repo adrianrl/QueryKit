@@ -10,8 +10,6 @@ public final class QueryObserver<Value: Sendable> {
     private var staleTime: TimeInterval?
     private var loader: (@Sendable () async throws -> Value)?
 
-    private var isConfigured = false
-
     public init() {}
 
     init(
@@ -24,22 +22,44 @@ public final class QueryObserver<Value: Sendable> {
         self.key = key
         self.staleTime = staleTime
         self.loader = loader
-        self.isConfigured = true
     }
 
-    func configureIfNeeded(
+    func configure(
         client: QueryClient,
         key: any QueryKey,
         staleTime: TimeInterval,
         loader: @Sendable @escaping () async throws -> Value
     ) {
-        guard !isConfigured else { return }
+        let keyChanged: Bool
+
+        if let currentKey = self.key {
+            keyChanged = AnyHashable(currentKey) != AnyHashable(key)
+        } else {
+            keyChanged = true
+        }
 
         self.client = client
-        self.key = key
         self.staleTime = staleTime
         self.loader = loader
-        self.isConfigured = true
+
+        if keyChanged {
+            // unsubscribe old
+            if let oldKey = self.key {
+                Task {
+                    await client.unsubscribe(key: oldKey, observer: self)
+                }
+            }
+
+            // subscribe new
+            Task {
+                await client.subscribe(key: key, observer: self)
+            }
+
+            self.key = key
+
+            // reset state
+            phase = .idle
+        }
     }
 
     public func fetch() async {
@@ -64,5 +84,17 @@ public final class QueryObserver<Value: Sendable> {
 
         await client.invalidate(key)
         await fetch()
+    }
+}
+
+@MainActor
+protocol AnyQueryObserver: AnyObject & Sendable {
+    func receive(value: any Sendable) async
+}
+
+extension QueryObserver: AnyQueryObserver {
+    func receive(value: Sendable) async {
+        guard let typed = value as? Value else { return }
+        phase = .success(typed)
     }
 }

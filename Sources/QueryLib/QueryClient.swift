@@ -6,6 +6,12 @@ public actor QueryClient {
         let timestamp: Date
     }
 
+    private var observers: [AnyHashable: [WeakBox]] = [:]
+
+    struct WeakBox {
+        weak var observer: AnyQueryObserver?
+    }
+
     private var cache: [AnyHashable: AnyCacheEntry] = [:]
     private var runningTasks: [AnyHashable: Task<any Sendable, Error>] = [:]
 
@@ -63,11 +69,20 @@ public actor QueryClient {
         do {
             let result = try await task.value as! Value
             cache[key] = AnyCacheEntry(value: result, timestamp: Date())
+            await notify(key: key, value: result)
             runningTasks[key] = nil
             return result
         } catch {
             runningTasks[key] = nil
             throw error
+        }
+    }
+
+    private func notify(key: AnyHashable, value: any Sendable) async {
+        observers[key] = observers[key]?.filter { $0.observer != nil }
+
+        for box in observers[key] ?? [] {
+            await box.observer?.receive(value: value)
         }
     }
 
@@ -81,6 +96,21 @@ public actor QueryClient {
 
     public func invalidateAll() {
         cache.removeAll()
+    }
+}
+
+extension QueryClient {
+    func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) {
+        let hash = AnyHashable(key)
+        let box = WeakBox(observer: observer)
+        observers[hash, default: []].append(box)
+    }
+
+    func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) {
+        let hash = AnyHashable(key)
+        observers[hash] = observers[hash]?.filter {
+            $0.observer !== observer && $0.observer != nil
+        }
     }
 }
 
