@@ -14,10 +14,19 @@ public actor QueryClient {
 
     private var cache: [AnyHashable: AnyCacheEntry] = [:]
     private var runningTasks: [AnyHashable: Task<any Sendable, Error>] = [:]
+    private let overrideStaleTime: TimeInterval?
 
     public static let shared = QueryClient()
 
-    public init() {}
+    /// Creates a new ``QueryClient`` instance.
+    ///
+    /// - Parameter overrideStaleTime: An optional time interval that, if provided,
+    ///   will override the stale time for all entries in this client. This is
+    ///   useful for testing scenarios where you want to control cache expiration.
+    ///   If `nil`, the stale time specified in each query will be used.
+    public init(overrideStaleTime: TimeInterval? = nil) {
+        self.overrideStaleTime = overrideStaleTime
+    }
 
     /// Creates a ``QueryClient`` with pre-populated cache entries.
     ///
@@ -27,10 +36,16 @@ public actor QueryClient {
     /// - Parameter seed: A dictionary mapping ``QueryKey`` values to their
     ///   corresponding cached values. Each entry is stored with a timestamp
     ///   of the current date and time.
-    public init<K: QueryKey>(seed: [K: any Sendable]) {
+    /// - Parameter overrideStaleTime: An optional time interval that, if provided,
+    ///   will override the stale time for all entries in this client. This is
+    ///   useful for testing scenarios where you want to control cache expiration.
+    ///   If `nil`, the stale time specified in each query will be used.
+    public init<K: QueryKey>(seed: [K: any Sendable], overrideStaleTime: TimeInterval? = nil) {
         for (key, value) in seed {
             cache[AnyHashable(key)] = AnyCacheEntry(value: value, timestamp: Date())
         }
+
+        self.overrideStaleTime = overrideStaleTime
     }
 
     public func fetch<Value: Sendable>(
@@ -47,9 +62,10 @@ public actor QueryClient {
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value {
         // Return valid cache
+        let effectiveStaleTime = overrideStaleTime ?? staleTime
         if let entry = cache[key],
            let value = entry.value as? Value,
-           Date().timeIntervalSince(entry.timestamp) < staleTime {
+           Date().timeIntervalSince(entry.timestamp) < effectiveStaleTime {
             return value
         }
 
@@ -65,15 +81,17 @@ public actor QueryClient {
         }
 
         runningTasks[key] = task
+        
+        defer {
+            runningTasks[key] = nil
+        }
 
         do {
             let result = try await task.value as! Value
             cache[key] = AnyCacheEntry(value: result, timestamp: Date())
             await notify(key: key, value: result)
-            runningTasks[key] = nil
             return result
         } catch {
-            runningTasks[key] = nil
             throw error
         }
     }
