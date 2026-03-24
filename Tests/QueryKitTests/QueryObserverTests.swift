@@ -1,6 +1,6 @@
 import Testing
 
-@testable import QueryLib
+@testable import QueryKit
 
 @Suite("QueryObserver tests")
 struct QueryObserverTests {
