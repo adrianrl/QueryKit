@@ -90,11 +90,16 @@ public final class QueryObserver<Value: Sendable> {
 @MainActor
 protocol AnyQueryObserver: AnyObject & Sendable {
     func receive(value: any Sendable) async
+    func didInvalidate() async
 }
 
 extension QueryObserver: AnyQueryObserver {
     func receive(value: Sendable) async {
         guard let typed = value as? Value else { return }
         phase = .success(typed)
+    }
+    
+    func didInvalidate() async {
+        await fetch()
     }
 }

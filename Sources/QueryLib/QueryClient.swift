@@ -103,13 +103,20 @@ public actor QueryClient {
             await box.observer?.receive(value: value)
         }
     }
+    
+    private func notifyInvalidated(key: AnyHashable) {
+        observers[key] = observers[key]?.filter { $0.observer != nil }
+    
+        Task {
+            for box in observers[key] ?? [] {
+                await box.observer?.didInvalidate()
+            }
+        }
+    }
 
     public func invalidate(_ key: some QueryKey) {
         cache.removeValue(forKey: AnyHashable(key))
-    }
-
-    func invalidate(_ key: AnyHashable) {
-        cache.removeValue(forKey: key)
+        notifyInvalidated(key: AnyHashable(key))
     }
 
     public func invalidateAll() {
@@ -133,16 +140,55 @@ extension QueryClient {
 }
 
 extension QueryClient {
-    public func mutate<Value, K: QueryKey>(
-        invalidate keys: [K],
-        operation: @Sendable () async throws -> Value
-    ) async throws -> Value {
-        let result = try await operation()
+    public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
+        _ key: K,
+        operation: @Sendable () async throws -> Result,
+        update: @Sendable (inout QueryValue, Result) -> Void
+    ) async throws {
+        let hash = AnyHashable(key)
+        var previousValue: QueryValue?
 
-        for key in keys {
-            invalidate(AnyHashable(key))
+        if let entry = cache[hash],
+           let value = entry.value as? QueryValue {
+            previousValue = value
         }
 
-        return result
+        do {
+            let result = try await operation()
+
+            if var value = previousValue {
+                update(&value, result)
+
+                cache[hash] = AnyCacheEntry(
+                    value: value,
+                    timestamp: Date()
+                )
+
+                await notify(key: hash, value: value)
+            }
+        } catch {
+            if let previousValue {
+                cache[hash] = AnyCacheEntry(
+                    value: previousValue,
+                    timestamp: Date()
+                )
+
+                await notify(key: hash, value: previousValue)
+            }
+
+            throw error
+        }
+    }
+
+    public func mutate<K: QueryKey, Result: Sendable>(
+        _ key: K,
+        operation: @Sendable () async throws -> Result
+    ) async throws {
+        do {
+            _ = try await operation()
+            invalidate(key)
+        } catch {
+            throw error
+        }
     }
 }
