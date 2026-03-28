@@ -140,11 +140,13 @@ extension QueryClient {
 }
 
 extension QueryClient {
+    @discardableResult
     public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
         _ key: K,
-        operation: @Sendable () async throws -> Result,
-        update: @Sendable (inout QueryValue, Result) -> Void
-    ) async throws {
+        invalidate: Bool,
+        onMutate: (@Sendable (inout QueryValue) -> Void),
+        operation: @Sendable () async throws -> Result
+    ) async throws -> Result {
         let hash = AnyHashable(key)
         var previousValue: QueryValue?
 
@@ -153,29 +155,68 @@ extension QueryClient {
             previousValue = value
         }
 
+        if var value = previousValue {
+            onMutate(&value)
+            await setCacheValue(key, value: value)
+        }
+
         do {
             let result = try await operation()
 
-            if var value = previousValue {
-                update(&value, result)
-
-                cache[hash] = AnyCacheEntry(
-                    value: value,
-                    timestamp: Date()
-                )
-
-                await notify(key: hash, value: value)
+            if invalidate {
+                self.invalidate(key)
             }
+
+            return result
         } catch {
             if let previousValue {
-                cache[hash] = AnyCacheEntry(
-                    value: previousValue,
-                    timestamp: Date()
-                )
-
-                await notify(key: hash, value: previousValue)
+                await setCacheValue(key, value: previousValue)
             }
 
+            throw error
+        }
+    }
+
+    @discardableResult
+    public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
+        _ key: K,
+        invalidate: Bool,
+        onMutate: (@Sendable (inout QueryValue) -> Void)? = nil,
+        onSuccess: (@Sendable (inout QueryValue, Result) -> Void),
+        operation: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let hash = AnyHashable(key)
+        var previousValue: QueryValue?
+    
+        if let entry = cache[hash],
+           let value = entry.value as? QueryValue {
+            previousValue = value
+        }
+    
+        if var value = previousValue {
+            onMutate?(&value)
+            await setCacheValue(key, value: value)
+        }
+    
+        do {
+            let result = try await operation()
+
+            if invalidate {
+                self.invalidate(key)
+                return result
+            }
+
+            if var value = previousValue {
+                onSuccess(&value, result)
+                await setCacheValue(key, value: value)
+            }
+
+            return result
+        } catch {
+            if let previousValue {
+                await setCacheValue(key, value: previousValue)
+            }
+    
             throw error
         }
     }
@@ -190,5 +231,14 @@ extension QueryClient {
         } catch {
             throw error
         }
+    }
+}
+
+extension QueryClient {    
+    func setCacheValue<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {
+        let key = AnyHashable(key)
+        
+        cache[key] = AnyCacheEntry(value: value, timestamp: Date())
+        await notify(key: key, value: value)
     }
 }
