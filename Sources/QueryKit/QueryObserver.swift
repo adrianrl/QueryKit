@@ -79,6 +79,22 @@ public final class QueryObserver<Value: Sendable> {
         }
     }
 
+    public func fetch(loader: @Sendable @escaping () async throws -> Value) async {
+        guard let client, let key else { return }
+
+        phase = .loading
+
+        do {
+            let value = try await client.fetch(
+                key: key,
+                loader: loader
+            )
+            phase = .success(value)
+        } catch {
+            phase = .failure(error)
+        }
+    }
+
     public func refresh() async {
         guard let client, let key else { return }
 
@@ -98,7 +114,7 @@ extension QueryObserver: AnyQueryObserver {
         guard let typed = value as? Value else { return }
         phase = .success(typed)
     }
-    
+
     func didInvalidate() async {
         await fetch()
     }

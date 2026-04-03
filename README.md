@@ -55,16 +55,40 @@ struct PostsView: View {
     @Query(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
 
     var body: some View {
-        switch $posts.phase {
-        case .loading:
-            ProgressView()
-        case .success(let posts):
-            List(posts) { PostRow($0) }
-        case .failure(let error):
-            Text(error.localizedDescription)
-        case .idle:
-            EmptyView()
+        VStack {
+            switch $posts.phase {
+            case .loading:
+                ProgressView()
+            case .success(let posts):
+                List(posts) { PostRow($0) }
+            case .failure(let error):
+                Text(error.localizedDescription)
+            case .idle:
+                EmptyView()
+            }
         }
+        .task {
+            await $posts.fetch()
+        }
+    }
+}
+```
+
+Use `fetch(loader:)` to trigger a fetch with a custom loader — useful when the loader depends on local state like a search query:
+
+```swift
+struct PostSearchView: View {
+    @Query(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
+    @State private var query = ""
+
+    var body: some View {
+        List { ... }
+            .searchable(text: $query)
+            .task(id: query) {
+                await $posts.fetch {
+                    try await API.shared.searchPosts(query: query)
+                }
+            }
     }
 }
 ```
