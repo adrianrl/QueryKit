@@ -4,7 +4,7 @@ import Foundation
 @Observable
 public final class MutationObserver<Value: Sendable> {
     private(set) public var phase: MutationPhase<Value> = .idle
-    private var client: QueryClient?
+    private var client: (any QueryClientProtocol)?
 
     public var isLoading: Bool {
         if case .loading = phase { return true }
@@ -16,7 +16,7 @@ public final class MutationObserver<Value: Sendable> {
         return nil
     }
 
-    func configure(client: QueryClient) {
+    func configure(client: any QueryClientProtocol) {
         self.client = client
     }
 

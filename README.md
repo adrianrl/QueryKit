@@ -129,6 +129,52 @@ try await client.mutate(PostsKey.list, operation: {
 })
 ```
 
+### SwiftUI Previews
+
+Use the `.queryPreview` modifier to inject a `MockQueryClient` with pre-configured phases for each key, without modifying your views:
+
+```swift
+#Preview("Success") {
+    PostsView()
+        .queryPreview(PostsKey.list, phase: .success([
+            Post(id: 1, title: "First Post", content: "This is the first post."),
+            Post(id: 2, title: "Second Post", content: "This is the second post.")
+        ]))
+}
+
+#Preview("Failure") {
+    PostsView()
+        .queryPreview(PostsKey.list, phase: .failure(APIError.notFound))
+}
+```
+
+For `.loading` and `.idle`, use the dedicated overloads to avoid specifying the generic type explicitly:
+
+```swift
+#Preview("Loading") {
+    PostsView()
+        .queryPreview(PostsKey.list, loading: [Post].self)
+}
+
+#Preview("Idle") {
+    PostsView()
+        .queryPreview(PostsKey.list, idle: [Post].self)
+}
+```
+
+To configure multiple keys at once, use the closure-based overload:
+
+```swift
+#Preview {
+    PostDetailView()
+        .queryPreview { mock in
+            mock
+                .stub(PostsKey.list, phase: .success([.mock]))
+                .stub(PostsKey.detail(1), phase: .failure(APIError.notFound))
+        }
+}
+```
+
 ## License
 
 MIT

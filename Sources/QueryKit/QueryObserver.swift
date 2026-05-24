@@ -5,7 +5,7 @@ import Foundation
 public final class QueryObserver<Value: Sendable> {
     public var phase: QueryPhase<Value> = .idle
 
-    private var client: QueryClient?
+    private var client: (any QueryClientProtocol)?
     private var key: (any QueryKey)?
     private var staleTime: TimeInterval?
     private var loader: (@Sendable () async throws -> Value)?
@@ -13,7 +13,7 @@ public final class QueryObserver<Value: Sendable> {
     public init() {}
 
     init(
-        client: QueryClient,
+        client: any QueryClientProtocol,
         key: any QueryKey,
         staleTime: TimeInterval,
         loader: @Sendable @escaping () async throws -> Value
@@ -25,7 +25,7 @@ public final class QueryObserver<Value: Sendable> {
     }
 
     func configure(
-        client: QueryClient,
+        client: any QueryClientProtocol,
         key: any QueryKey,
         staleTime: TimeInterval,
         loader: @Sendable @escaping () async throws -> Value

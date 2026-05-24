@@ -1,6 +1,6 @@
 import Foundation
 
-public actor QueryClient {
+public actor QueryClient: QueryClientProtocol {
     private struct AnyCacheEntry {
         let value: any Sendable
         let timestamp: Date
@@ -54,6 +54,20 @@ public actor QueryClient {
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value {
         try await fetch(key: AnyHashable(key), staleTime: staleTime, loader: loader)
+    }
+
+    public func fetch<Value: Sendable>(
+        key: some QueryKey,
+        loader: @Sendable @escaping () async throws -> Value
+    ) async throws -> Value {
+        try await fetch(key: AnyHashable(key), loader: loader)
+    }
+
+    func fetch<Value: Sendable>(
+        key: AnyHashable,
+        loader: @Sendable @escaping () async throws -> Value
+    ) async throws -> Value {
+        try await fetch(key: key, staleTime: 0, loader: loader)
     }
 
     func fetch<Value: Sendable>(
@@ -114,7 +128,7 @@ public actor QueryClient {
         }
     }
 
-    public func invalidate(_ key: some QueryKey) {
+    public func invalidate(_ key: some QueryKey) async {
         cache.removeValue(forKey: AnyHashable(key))
         notifyInvalidated(key: AnyHashable(key))
     }
@@ -125,13 +139,13 @@ public actor QueryClient {
 }
 
 extension QueryClient {
-    func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) {
+    public func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
         let hash = AnyHashable(key)
         let box = WeakBox(observer: observer)
         observers[hash, default: []].append(box)
     }
 
-    func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) {
+    public func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
         let hash = AnyHashable(key)
         observers[hash] = observers[hash]?.filter {
             $0.observer !== observer && $0.observer != nil
@@ -164,7 +178,7 @@ extension QueryClient {
             let result = try await operation()
 
             if invalidate {
-                self.invalidate(key)
+                await self.invalidate(key)
             }
 
             return result
@@ -202,7 +216,7 @@ extension QueryClient {
             let result = try await operation()
 
             if invalidate {
-                self.invalidate(key)
+                await self.invalidate(key)
                 return result
             }
 
@@ -227,7 +241,7 @@ extension QueryClient {
     ) async throws {
         do {
             _ = try await operation()
-            invalidate(key)
+            await invalidate(key)
         } catch {
             throw error
         }
