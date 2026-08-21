@@ -74,6 +74,15 @@ struct PostsView: View {
 }
 ```
 
+`QueryPhase` also exposes `value`, `isLoading` and `error` if you'd rather read one
+of them directly than switch over every case:
+
+```swift
+if $posts.phase.isLoading {
+    ProgressView()
+}
+```
+
 Use `fetch(loader:)` to trigger a fetch with a custom loader — useful when the loader depends on local state like a search query:
 
 ```swift
@@ -92,6 +101,49 @@ struct PostSearchView: View {
     }
 }
 ```
+
+### Revalidation
+
+`phase` only reports `.loading` when there is no value to show. Once a query has
+succeeded, a refetch keeps the previous value in `phase` and reports itself
+through `isFetching`, so the list doesn't disappear on every refresh:
+
+```swift
+struct PostsView: View {
+    @Query(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
+
+    var body: some View {
+        List(posts ?? []) { PostRow($0) }
+            .overlay(alignment: .top) {
+                if $posts.isFetching {
+                    ProgressView()
+                }
+            }
+            .refreshable {
+                await $posts.refresh()
+            }
+    }
+}
+```
+
+The same applies to failures. A refetch that fails leaves the previous value in
+`phase` and reports the error through `error`, so you can surface it without
+tearing down the list:
+
+```swift
+VStack {
+    if let error = $posts.error {
+        RefreshFailedBanner(error: error)
+    }
+
+    List(posts ?? []) { PostRow($0) }
+}
+```
+
+When the failure happens with no value to fall back on — a failed first load —
+`phase` becomes `.failure(error)` and carries the same error. So `switch $posts.phase`
+handles the empty states, and `isFetching` / `error` handle everything that happens
+on top of already-loaded data.
 
 ### Mutations
 
