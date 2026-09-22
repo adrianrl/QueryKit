@@ -49,7 +49,7 @@ public final class QueryObserver<Value: Sendable> {
         client: any QueryClientProtocol,
         key: any QueryKey,
         staleTime: TimeInterval,
-        loader: @Sendable @escaping () async throws -> Value
+        loader: (@Sendable () async throws -> Value)? = nil
     ) {
         let keyChanged: Bool
 
@@ -61,7 +61,6 @@ public final class QueryObserver<Value: Sendable> {
 
         self.client = client
         self.staleTime = staleTime
-        self.loader = loader
 
         if keyChanged {
             // unsubscribe old
@@ -77,10 +76,11 @@ public final class QueryObserver<Value: Sendable> {
             }
 
             self.key = key
-
-            // reset state
+            self.loader = loader
             phase = .idle
             error = nil
+        } else if let loader {
+            self.loader = loader
         }
     }
 
@@ -96,9 +96,11 @@ public final class QueryObserver<Value: Sendable> {
         }
     }
 
+    /// Fetches with `loader` and stores it as the query function for later ``fetch()``, ``refresh()``, and invalidation.
     public func fetch(loader: @Sendable @escaping () async throws -> Value) async {
         guard let client, let key else { return }
 
+        self.loader = loader
         await performFetch {
             try await client.fetch(
                 key: key,
