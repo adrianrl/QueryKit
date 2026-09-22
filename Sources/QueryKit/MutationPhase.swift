@@ -6,7 +6,8 @@ public enum MutationPhase<Value> {
 }
 
 extension MutationPhase {
-    var value: Value? {
+    /// The result of the operation, if this phase is ``success(_:)``.
+    public var value: Value? {
         if case .success(let value) = self {
             return value
         }
