@@ -45,6 +45,7 @@ Define a `QueryKey` to identify your query in the cache:
 enum PostsKey: QueryKey {
     case list
     case detail(Int)
+    case search(String)
 }
 ```
 
@@ -74,21 +75,47 @@ struct PostsView: View {
 }
 ```
 
-Use `fetch(loader:)` to trigger a fetch with a custom loader — useful when the loader depends on local state like a search query:
+When the loader depends on a SwiftUI environment value that is not available in `init`, create the query with only a key. `fetch(loader:)` stores that function and reuses it for `refresh()` and `invalidate`:
+
+```swift
+struct PostDetailView: View {
+    let postId: Int
+    @Environment(\.api) private var api
+    @Query(PostsKey.detail(postId)) private var post
+
+    var body: some View {
+        content
+            .task {
+                await $post.fetch {
+                    try await api.fetchPost(id: postId)
+                }
+            }
+    }
+}
+```
+
+Give each distinct request its own key. For search, recreate the query when the term changes instead of reusing the list key:
 
 ```swift
 struct PostSearchView: View {
-    @Query(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
     @State private var query = ""
 
     var body: some View {
-        List { ... }
+        PostSearchResultsView(query: query)
+            .id(query)
             .searchable(text: $query)
-            .task(id: query) {
-                await $posts.fetch {
-                    try await API.shared.searchPosts(query: query)
-                }
-            }
+    }
+}
+
+struct PostSearchResultsView: View {
+    let query: String
+    @Query(PostsKey.search(query), loader: {
+        try await API.shared.searchPosts(query: query)
+    }) private var posts
+
+    var body: some View {
+        List { ... }
+            .task { await $posts.fetch() }
     }
 }
 ```

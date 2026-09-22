@@ -2,7 +2,7 @@ import Testing
 
 @testable import QueryKit
 
-enum TestKey: QueryKey { case users }
+enum TestKey: QueryKey { case users, posts }
 
 @Suite("QueryClient tests")
 struct QueryClientTests {

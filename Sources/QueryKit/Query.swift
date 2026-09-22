@@ -8,7 +8,7 @@ public struct Query<Value: Sendable>: @preconcurrency DynamicProperty {
 
     private let key: any QueryKey
     private let staleTime: TimeInterval
-    private let loader: @Sendable () async throws -> Value
+    private let loader: (@Sendable () async throws -> Value)?
 
     public var wrappedValue: Value? {
         observer.phase.value
@@ -26,6 +26,15 @@ public struct Query<Value: Sendable>: @preconcurrency DynamicProperty {
         self.key = key
         self.staleTime = staleTime
         self.loader = loader
+    }
+
+    public init(
+        _ key: any QueryKey,
+        staleTime: TimeInterval = 60
+    ) {
+        self.key = key
+        self.staleTime = staleTime
+        self.loader = nil
     }
 
     public mutating func update() {
