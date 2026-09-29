@@ -97,15 +97,27 @@ public final class QueryObserver<Value: Sendable> {
     }
 
     /// Fetches with `loader` and stores it as the query function for later ``fetch()``, ``refresh()``, and invalidation.
+    ///
+    /// Honours the query's `staleTime` like ``fetch()``: a cached value younger than it is
+    /// returned without calling `loader`. Use ``refresh()`` to bypass the cache.
     public func fetch(loader: @Sendable @escaping () async throws -> Value) async {
         guard let client, let key else { return }
 
         self.loader = loader
+        let staleTime = self.staleTime
         await performFetch {
-            try await client.fetch(
-                key: key,
-                loader: loader
-            )
+            if let staleTime {
+                try await client.fetch(
+                    key: key,
+                    staleTime: staleTime,
+                    loader: loader
+                )
+            } else {
+                try await client.fetch(
+                    key: key,
+                    loader: loader
+                )
+            }
         }
     }
 
