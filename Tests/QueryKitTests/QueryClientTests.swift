@@ -42,4 +42,20 @@ struct QueryClientTests {
 
         #expect(value == 2)
     }
+
+    @Test("setQueryData is served from cache and pushed to observers")
+    @MainActor
+    func testSetQueryData() async throws {
+        let client = QueryClient()
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: client, key: TestKey.users, staleTime: 60)
+        await Task.yield() // let configure's subscribe Task run
+
+        await client.setQueryData(TestKey.users, value: ["seeded"])
+
+        #expect(observer.phase.value == ["seeded"])
+
+        let cached = try await client.fetch(key: TestKey.users, staleTime: 60) { ["loaded"] }
+        #expect(cached == ["seeded"])
+    }
 }

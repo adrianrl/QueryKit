@@ -208,6 +208,13 @@ try await client.mutate(PostsKey.list, operation: {
 })
 ```
 
+To write to the cache directly — for example, with data you already have from
+another response — use `setQueryData`. Observers of that key update immediately:
+
+```swift
+await client.setQueryData(PostsKey.detail(post.id), value: post)
+```
+
 ### SwiftUI Previews
 
 Use the `.queryPreview` modifier to inject a `MockQueryClient` with pre-configured phases for each key, without modifying your views:
