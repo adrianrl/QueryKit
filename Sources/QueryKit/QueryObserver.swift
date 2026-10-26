@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 @Observable
-public final class QueryObserver<Value: Sendable> {
+public class QueryObserver<Value: Sendable> {
     public var phase: QueryPhase<Value> = .idle
 
     /// `true` while a fetch is in flight, including revalidation of a value that
@@ -20,10 +20,10 @@ public final class QueryObserver<Value: Sendable> {
     /// doesn't remove data that is already on screen. When the failure happens
     /// with no value to fall back on, ``phase`` becomes
     /// ``QueryPhase/failure(_:)`` and carries the same error.
-    public private(set) var error: Error?
+    public internal(set) var error: Error?
 
-    private var client: (any QueryClientProtocol)?
-    private var key: (any QueryKey)?
+    var client: (any QueryClientProtocol)?
+    var key: (any QueryKey)?
     private var staleTime: TimeInterval?
     private var loader: (@Sendable () async throws -> Value)?
 
