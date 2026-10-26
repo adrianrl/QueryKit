@@ -194,7 +194,8 @@ struct PostsView: View {
 
             if $posts.hasNextPage {
                 ProgressView()
-                    .task { await $posts.fetchNextPage() }
+                    // id: re-run after each page, in case the spinner never left the screen
+                    .task(id: posts?.pages.count) { await $posts.fetchNextPage() }
             }
         }
         .task { await $posts.fetch() }
