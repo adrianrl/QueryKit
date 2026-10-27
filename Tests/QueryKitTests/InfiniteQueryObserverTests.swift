@@ -1,3 +1,4 @@
+import Observation
 import Testing
 
 @testable import QueryKit
@@ -104,6 +105,32 @@ struct InfiniteQueryObserverTests {
         await next.value
 
         #expect(observer.phase.value == InfiniteData(pages: [["x"]], pageParams: [7]))
+    }
+
+    @Test("re-configuring does not invalidate views reading hasNextPage")
+    func reconfigureDoesNotInvalidate() async {
+        let pages = Pages()
+        let client = QueryClient()
+        let observer = pages.makeObserver(client: client)
+        await observer.fetch()
+
+        // SwiftUI calls configure from update() on every body evaluation.
+        nonisolated(unsafe) var invalidated = false
+        withObservationTracking {
+            _ = observer.hasNextPage
+        } onChange: {
+            invalidated = true
+        }
+        observer.configure(
+            client: client,
+            key: TestKey.posts,
+            staleTime: 60,
+            initialPageParam: 1,
+            getNextPageParam: { _, _, last in last < 3 ? last + 1 : nil },
+            pageLoader: { page in ["\(page)"] }
+        )
+
+        #expect(!invalidated)
     }
 
     @Test("a failed fetchNextPage keeps the loaded pages and reports the error")

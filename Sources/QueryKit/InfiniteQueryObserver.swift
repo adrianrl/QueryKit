@@ -11,15 +11,16 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
     public typealias PageLoader = @Sendable (PageParam) async throws -> Page
 
     /// Returns the parameter for the page after `lastPage`, or `nil` when there are no more pages.
-    public typealias NextPageParam = @Sendable (_ lastPage: Page, _ pages: [Page], _ lastPageParam: PageParam) -> PageParam?
+    public typealias NextPageParam = @MainActor (_ lastPage: Page, _ pages: [Page], _ lastPageParam: PageParam) -> PageParam?
 
     /// `true` while ``fetchNextPage()`` is in flight. ``isFetching`` does not cover it:
     /// loading one more page should not be mistaken for a refetch of the list.
     public private(set) var isFetchingNextPage = false
 
-    private var initialPageParam: PageParam?
-    private var getNextPageParam: NextPageParam?
-    private var pageLoader: PageLoader?
+    // Configuration, rewritten by every SwiftUI update(): observing it would re-render forever.
+    @ObservationIgnored private var initialPageParam: PageParam?
+    @ObservationIgnored private var getNextPageParam: NextPageParam?
+    @ObservationIgnored private var pageLoader: PageLoader?
 
     public var hasNextPage: Bool {
         nextPageParam != nil
