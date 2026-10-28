@@ -56,6 +56,13 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
         }
     }
 
+    /// Unavailable: a single-value loader would replace the page loader and break pagination.
+    /// Reached only through a `QueryObserver` reference, where it falls back to ``fetch()``.
+    @available(*, unavailable, message: "Use fetch(); the page loader is set by @InfiniteQuery")
+    override public func fetch(loader: @Sendable @escaping () async throws -> InfiniteData<Page, PageParam>) async {
+        await fetch()
+    }
+
     /// Loads the page after the last one and appends it to ``phase``.
     ///
     /// Does nothing when there is no next page or one is already loading. A failure
