@@ -1,6 +1,6 @@
 # QueryKit
 
-A lightweight Swift library for data fetching and caching in SwiftUI, inspired by [TanStack Query](https://tanstack.com/query). Provides `@Query` and `@Mutation` property wrappers with built-in caching, deduplication, and optimistic updates.
+A lightweight Swift library for data fetching and caching in SwiftUI, inspired by [TanStack Query](https://tanstack.com/query). Provides `@RemoteQuery`, `@RemoteInfiniteQuery` and `@Mutation` property wrappers with built-in caching, deduplication, and optimistic updates.
 
 > **Early development.** The API is subject to change.
 
@@ -51,11 +51,11 @@ enum PostsKey: QueryKey {
 }
 ```
 
-Use `@Query` in your view to fetch and cache data automatically:
+Use `@RemoteQuery` in your view to fetch and cache data automatically:
 
 ```swift
 struct PostsView: View {
-    @Query(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
+    @RemoteQuery(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
 
     var body: some View {
         VStack {
@@ -92,7 +92,7 @@ When the loader depends on a SwiftUI environment value that is not available in 
 struct PostDetailView: View {
     let postId: Int
     @Environment(\.api) private var api
-    @Query(PostsKey.detail(postId)) private var post
+    @RemoteQuery(PostsKey.detail(postId)) private var post
 
     var body: some View {
         content
@@ -120,7 +120,7 @@ struct PostSearchView: View {
 
 struct PostSearchResultsView: View {
     let query: String
-    @Query(PostsKey.search(query), loader: {
+    @RemoteQuery(PostsKey.search(query), loader: {
         try await API.shared.searchPosts(query: query)
     }) private var posts
 
@@ -139,7 +139,7 @@ through `isFetching`, so the list doesn't disappear on every refresh:
 
 ```swift
 struct PostsView: View {
-    @Query(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
+    @RemoteQuery(PostsKey.list, loader: { try await API.shared.fetchPosts() }) private var posts
 
     var body: some View {
         List(posts ?? []) { PostRow($0) }
@@ -176,14 +176,14 @@ on top of already-loaded data.
 
 ### Pagination
 
-`@InfiniteQuery` loads a list page by page. Give it the first page's parameter, a
+`@RemoteInfiniteQuery` loads a list page by page. Give it the first page's parameter, a
 loader for one page, and a function that derives the next parameter from the last
 page (return `nil` when there are no more). The value is an `InfiniteData` with the
 `pages` loaded so far and the `pageParams` they were fetched with:
 
 ```swift
 struct PostsView: View {
-    @InfiniteQuery(
+    @RemoteInfiniteQuery(
         PostsKey.list,
         initialPageParam: 1,
         getNextPageParam: { lastPage, _, page in lastPage.isEmpty ? nil : page + 1 },
@@ -283,7 +283,7 @@ await createPost.mutate(
 ```
 
 An update is skipped when its key has nothing cached. The closure's type must match
-the cached value — a mismatch traps in debug builds. For an `@InfiniteQuery` key that
+the cached value — a mismatch traps in debug builds. For a `@RemoteInfiniteQuery` key that
 type is `InfiniteData<Page, PageParam>`, not the page type. Outside SwiftUI,
 `QueryClient.mutate(updating:invalidate:operation:)` does the same and throws on failure.
 

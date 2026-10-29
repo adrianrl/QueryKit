@@ -2,7 +2,7 @@ import SwiftUI
 
 @MainActor
 @propertyWrapper
-public struct InfiniteQuery<Page: Sendable, PageParam: Sendable & Equatable>: @preconcurrency DynamicProperty {
+public struct RemoteInfiniteQuery<Page: Sendable, PageParam: Sendable & Equatable>: @preconcurrency DynamicProperty {
     public typealias Observer = InfiniteQueryObserver<Page, PageParam>
 
     @Environment(\.queryClient) private var client

@@ -7,7 +7,7 @@
 ///
 /// Nothing is applied when `key` has no cached value. A cached value of a type
 /// other than `QueryValue` is a programming error: it traps in debug builds and
-/// is skipped in release. For an ``InfiniteQuery`` key, `QueryValue` is
+/// is skipped in release. For a ``RemoteInfiniteQuery`` key, `QueryValue` is
 /// `InfiniteData<Page, PageParam>`, not the page type.
 ///
 /// ```swift
