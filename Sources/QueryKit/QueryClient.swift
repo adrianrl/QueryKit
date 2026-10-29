@@ -56,20 +56,6 @@ public actor QueryClient: QueryClientProtocol {
         try await fetch(key: AnyHashable(key), staleTime: staleTime, loader: loader)
     }
 
-    public func fetch<Value: Sendable>(
-        key: some QueryKey,
-        loader: @Sendable @escaping () async throws -> Value
-    ) async throws -> Value {
-        try await fetch(key: AnyHashable(key), loader: loader)
-    }
-
-    func fetch<Value: Sendable>(
-        key: AnyHashable,
-        loader: @Sendable @escaping () async throws -> Value
-    ) async throws -> Value {
-        try await fetch(key: key, staleTime: 0, loader: loader)
-    }
-
     func fetch<Value: Sendable>(
         key: AnyHashable,
         staleTime: TimeInterval = 60,
@@ -133,19 +119,24 @@ public actor QueryClient: QueryClientProtocol {
         notifyInvalidated(key: AnyHashable(key))
     }
 
-    public func invalidateAll() {
+    /// Empties the cache and refetches every query that has an observer, as ``invalidate(_:)`` does for one key.
+    public func invalidateAll() async {
         cache.removeAll()
+
+        for key in observers.keys {
+            notifyInvalidated(key: key)
+        }
     }
 }
 
 extension QueryClient {
-    public func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
+    func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
         let hash = AnyHashable(key)
         let box = WeakBox(observer: observer)
         observers[hash, default: []].append(box)
     }
 
-    public func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
+    func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
         let hash = AnyHashable(key)
         observers[hash] = observers[hash]?.filter {
             $0.observer !== observer && $0.observer != nil
