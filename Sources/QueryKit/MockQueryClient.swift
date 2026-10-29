@@ -59,6 +59,8 @@ public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
 
     public func invalidate(_ key: some QueryKey) async {}
 
+    public func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {}
+
     public func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {}
 
     public func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {}

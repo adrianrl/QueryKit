@@ -172,6 +172,49 @@ When the failure happens with no value to fall back on — a failed first load �
 handles the empty states, and `isFetching` / `error` handle everything that happens
 on top of already-loaded data.
 
+### Pagination
+
+`@InfiniteQuery` loads a list page by page. Give it the first page's parameter, a
+loader for one page, and a function that derives the next parameter from the last
+page (return `nil` when there are no more). The value is an `InfiniteData` with the
+`pages` loaded so far and the `pageParams` they were fetched with:
+
+```swift
+struct PostsView: View {
+    @InfiniteQuery(
+        PostsKey.list,
+        initialPageParam: 1,
+        getNextPageParam: { lastPage, _, page in lastPage.isEmpty ? nil : page + 1 },
+        loader: { page in try await API.shared.fetchPosts(page: page) }
+    ) private var posts
+
+    var body: some View {
+        List {
+            ForEach(posts?.pages.flatMap(\.self) ?? []) { PostRow($0) }
+
+            if $posts.hasNextPage {
+                ProgressView()
+                    // id: re-run after each page, in case the spinner never left the screen
+                    .task(id: posts?.pages.count) { await $posts.fetchNextPage() }
+            }
+        }
+        .task { await $posts.fetch() }
+        .refreshable { await $posts.refresh() }
+    }
+}
+```
+
+For cursor-based APIs, read the cursor off the last page:
+`getNextPageParam: { lastPage, _, _ in lastPage.nextCursor }`.
+
+The whole list is cached under one key. A refetch — `refresh()`, or an invalidation
+from a mutation — reloads every page that is on screen, in order, starting from the
+first page's parameter, so the scroll position survives and a list opened at page 5
+from a deep link stays at page 5. `fetchNextPage()` ignores calls while a page is
+already loading, and reports a failure through `error` without dropping the pages
+you have. `isFetchingNextPage` is separate from `isFetching`, so you can show a
+footer spinner without the list looking like it is refreshing.
+
 ### Mutations
 
 Use `@Mutation` to perform write operations:
@@ -206,6 +249,13 @@ try await client.mutate(PostsKey.list, operation: {
 }, update: { (posts: inout [Post], _) in
     posts.removeAll { $0.id == post.id }
 })
+```
+
+To write to the cache directly — for example, with data you already have from
+another response — use `setQueryData`. Observers of that key update immediately:
+
+```swift
+await client.setQueryData(PostsKey.detail(post.id), value: post)
 ```
 
 ### SwiftUI Previews

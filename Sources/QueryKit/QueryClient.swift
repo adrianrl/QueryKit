@@ -171,7 +171,7 @@ extension QueryClient {
 
         if var value = previousValue {
             onMutate(&value)
-            await setCacheValue(key, value: value)
+            await setQueryData(key, value: value)
         }
 
         do {
@@ -184,7 +184,7 @@ extension QueryClient {
             return result
         } catch {
             if let previousValue {
-                await setCacheValue(key, value: previousValue)
+                await setQueryData(key, value: previousValue)
             }
 
             throw error
@@ -209,7 +209,7 @@ extension QueryClient {
     
         if var value = previousValue {
             onMutate?(&value)
-            await setCacheValue(key, value: value)
+            await setQueryData(key, value: value)
         }
     
         do {
@@ -222,13 +222,13 @@ extension QueryClient {
 
             if var value = previousValue {
                 onSuccess(&value, result)
-                await setCacheValue(key, value: value)
+                await setQueryData(key, value: value)
             }
 
             return result
         } catch {
             if let previousValue {
-                await setCacheValue(key, value: previousValue)
+                await setQueryData(key, value: previousValue)
             }
     
             throw error
@@ -248,8 +248,9 @@ extension QueryClient {
     }
 }
 
-extension QueryClient {    
-    func setCacheValue<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {
+extension QueryClient {
+    /// Writes `value` to the cache for `key` and notifies its observers, without running a loader.
+    public func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {
         let key = AnyHashable(key)
         
         cache[key] = AnyCacheEntry(value: value, timestamp: Date())

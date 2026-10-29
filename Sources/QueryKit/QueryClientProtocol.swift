@@ -17,6 +17,8 @@ public protocol QueryClientProtocol: AnyObject & Sendable {
 
     func invalidate(_ key: some QueryKey) async
 
+    func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async
+
     func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async
 
     func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async
