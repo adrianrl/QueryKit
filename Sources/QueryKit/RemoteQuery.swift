@@ -2,7 +2,7 @@ import SwiftUI
 
 @MainActor
 @propertyWrapper
-public struct Query<Value: Sendable>: @preconcurrency DynamicProperty {
+public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
     @Environment(\.queryClient) private var client
     @State private var observer = QueryObserver<Value>()
 
