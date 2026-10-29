@@ -283,7 +283,7 @@ await createPost.mutate(
 ```
 
 An update is skipped when its key has nothing cached. The closure's type must match
-the cached value — a mismatch traps in debug builds. For an `@RemoteInfiniteQuery` key that
+the cached value — a mismatch traps in debug builds. For a `@RemoteInfiniteQuery` key that
 type is `InfiniteData<Page, PageParam>`, not the page type. Outside SwiftUI,
 `QueryClient.mutate(updating:invalidate:operation:)` does the same and throws on failure.
 
