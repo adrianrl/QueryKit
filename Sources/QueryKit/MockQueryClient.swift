@@ -66,31 +66,12 @@ public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
     public func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {}
 
     @discardableResult
-    public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
-        _ key: K,
-        invalidate: Bool,
-        onMutate: @Sendable (inout QueryValue) -> Void,
+    public func mutate<Result: Sendable>(
+        updating updates: [CacheUpdate<Result>],
+        invalidate keys: [any QueryKey],
         operation: @Sendable () async throws -> Result
     ) async throws -> Result {
         try await operation()
-    }
-
-    @discardableResult
-    public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
-        _ key: K,
-        invalidate: Bool,
-        onMutate: (@Sendable (inout QueryValue) -> Void)?,
-        onSuccess: @Sendable (inout QueryValue, Result) -> Void,
-        operation: @Sendable () async throws -> Result
-    ) async throws -> Result {
-        try await operation()
-    }
-
-    public func mutate<K: QueryKey, Result: Sendable>(
-        _ key: K,
-        operation: @Sendable () async throws -> Result
-    ) async throws {
-        _ = try await operation()
     }
 
     // MARK: - Private

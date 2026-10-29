@@ -154,106 +154,65 @@ extension QueryClient {
 }
 
 extension QueryClient {
+    /// Runs `operation`, applying `updates` to the cache around it and invalidating `keys` on success.
+    ///
+    /// Each update's optimistic change is written before `operation` runs. If `operation`
+    /// throws, every changed key is restored to its previous value and the error is rethrown.
+    /// If it succeeds, each update's `onSuccess` runs on the current cached value, then
+    /// `keys` are invalidated.
     @discardableResult
-    public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
-        _ key: K,
-        invalidate: Bool,
-        onMutate: (@Sendable (inout QueryValue) -> Void),
+    public func mutate<Result: Sendable>(
+        updating updates: [CacheUpdate<Result>] = [],
+        invalidate keys: [any QueryKey] = [],
         operation: @Sendable () async throws -> Result
     ) async throws -> Result {
-        let hash = AnyHashable(key)
-        var previousValue: QueryValue?
+        var previousValues: [(key: AnyHashable, value: any Sendable)] = []
 
-        if let entry = cache[hash],
-           let value = entry.value as? QueryValue {
-            previousValue = value
+        for update in updates {
+            let key = AnyHashable(update.key)
+            guard let previous = cache[key]?.value,
+                  let value = update.optimistic(previous) else { continue }
+
+            previousValues.append((key, previous))
+            await write(value, for: key)
         }
 
-        if var value = previousValue {
-            onMutate(&value)
-            await setQueryData(key, value: value)
-        }
-
+        let result: Result
         do {
-            let result = try await operation()
-
-            if invalidate {
-                await self.invalidate(key)
-            }
-
-            return result
+            result = try await operation()
         } catch {
-            if let previousValue {
-                await setQueryData(key, value: previousValue)
+            // Reversed, so two updates on the same key end on the value from before the first.
+            for (key, previous) in previousValues.reversed() {
+                await write(previous, for: key)
             }
-
             throw error
         }
-    }
 
-    @discardableResult
-    public func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
-        _ key: K,
-        invalidate: Bool,
-        onMutate: (@Sendable (inout QueryValue) -> Void)? = nil,
-        onSuccess: (@Sendable (inout QueryValue, Result) -> Void),
-        operation: @Sendable () async throws -> Result
-    ) async throws -> Result {
-        let hash = AnyHashable(key)
-        var previousValue: QueryValue?
-    
-        if let entry = cache[hash],
-           let value = entry.value as? QueryValue {
-            previousValue = value
+        for update in updates {
+            let key = AnyHashable(update.key)
+            guard let onSuccess = update.onSuccess,
+                  let current = cache[key]?.value,
+                  let value = onSuccess(current, result) else { continue }
+
+            await write(value, for: key)
         }
-    
-        if var value = previousValue {
-            onMutate?(&value)
-            await setQueryData(key, value: value)
-        }
-    
-        do {
-            let result = try await operation()
 
-            if invalidate {
-                await self.invalidate(key)
-                return result
-            }
-
-            if var value = previousValue {
-                onSuccess(&value, result)
-                await setQueryData(key, value: value)
-            }
-
-            return result
-        } catch {
-            if let previousValue {
-                await setQueryData(key, value: previousValue)
-            }
-    
-            throw error
-        }
-    }
-
-    public func mutate<K: QueryKey, Result: Sendable>(
-        _ key: K,
-        operation: @Sendable () async throws -> Result
-    ) async throws {
-        do {
-            _ = try await operation()
+        for key in keys {
             await invalidate(key)
-        } catch {
-            throw error
         }
+
+        return result
+    }
+
+    private func write(_ value: any Sendable, for key: AnyHashable) async {
+        cache[key] = AnyCacheEntry(value: value, timestamp: Date())
+        await notify(key: key, value: value)
     }
 }
 
 extension QueryClient {
     /// Writes `value` to the cache for `key` and notifies its observers, without running a loader.
     public func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {
-        let key = AnyHashable(key)
-        
-        cache[key] = AnyCacheEntry(value: value, timestamp: Date())
-        await notify(key: key, value: value)
+        await write(value, for: AnyHashable(key))
     }
 }
