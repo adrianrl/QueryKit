@@ -20,95 +20,28 @@ public final class MutationObserver<Value: Sendable> {
         self.client = client
     }
 
+    /// Runs `operation`, applying `updates` to the cache around it and invalidating `keys` on success.
+    ///
+    /// Doesn't throw: a failure is reported through ``phase`` and ``error``, and any
+    /// optimistic change from `updates` is rolled back. Returns the operation's result,
+    /// or `nil` if it failed.
+    @discardableResult
     public func mutate(
+        updating updates: CacheUpdate<Value>...,
         invalidate keys: [any QueryKey] = [],
         operation: @Sendable () async throws -> Value
-    ) async {
+    ) async -> Value? {
+        guard let client else { return nil }
+
         phase = .loading
 
         do {
-            let result = try await operation()
-
-            for key in keys {
-                await client?.invalidate(key)
-            }
-
+            let result = try await client.mutate(updating: updates, invalidate: keys, operation: operation)
             phase = .success(result)
+            return result
         } catch {
             phase = .failure(error)
-        }
-    }
-    
-    public func mutate(
-        invalidate keys: (any QueryKey)...,
-        operation: @Sendable () async throws -> Value
-    ) async {
-        phase = .loading
-
-        do {
-            let result = try await operation()
-
-            for key in keys {
-                await client?.invalidate(key)
-            }
-
-            phase = .success(result)
-        } catch {
-            phase = .failure(error)
-        }
-    }
-    
-    public func mutate<QueryValue: Sendable>(
-        _ key: any QueryKey,
-        invalidate: Bool,
-        onMutate: (@Sendable (inout QueryValue) -> Void),
-        operation: @Sendable () async throws -> Value
-    ) async {
-        phase = .loading
-
-        do {
-            let result = try await client?.mutate(
-                key,
-                invalidate: invalidate,
-                onMutate: onMutate,
-                operation: operation
-            )
-
-            if let result {
-                phase = .success(result)
-            }
-        } catch {
-            phase = .failure(error)
-        }
-    }
-
-    public func mutate<QueryValue: Sendable>(
-        _ key: any QueryKey,
-        invalidate keys: [any QueryKey] = [],
-        onMutate: (@Sendable (inout QueryValue) -> Void)? = nil,
-        onSuccess: (@Sendable (inout QueryValue, Value) -> Void),
-        operation: @Sendable () async throws -> Value
-    ) async {
-        phase = .loading
-    
-        do {
-            let result = try await client?.mutate(
-                key,
-                invalidate: !keys.isEmpty,
-                onMutate: onMutate,
-                onSuccess: onSuccess,
-                operation: operation
-            )
-    
-            for key in keys {
-                await client?.invalidate(key)
-            }
-    
-            if let result {
-                phase = .success(result)
-            }
-        } catch {
-            phase = .failure(error)
+            return nil
         }
     }
 }

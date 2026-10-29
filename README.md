@@ -14,8 +14,10 @@ A lightweight Swift library for data fetching and caching in SwiftUI, inspired b
 Add QueryKit to your project via Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/adrianrl/QueryKit", from: "0.1.0")
+.package(url: "https://github.com/adrianrl/QueryKit", .upToNextMinor(from: "0.1.0"))
 ```
+
+While QueryKit is below 1.0, breaking changes bump the minor version, so pin it with `.upToNextMinor(from:)`.
 
 ## Usage
 
@@ -217,19 +219,21 @@ footer spinner without the list looking like it is refreshing.
 
 ### Mutations
 
-Use `@Mutation` to perform write operations:
+Use `@Mutation` to perform write operations. Its type parameter is the result of the
+operation, so a mutation that returns nothing is `@Mutation<Void>`:
 
 ```swift
 struct PostDetailView: View {
-    @Mutation private var deletePost
+    @Environment(\.api) private var api
+    @Mutation<Void> private var deletePost
 
     let post: Post
 
     var body: some View {
         Button("Delete") {
             Task {
-                // applies changes and refetches automatically
-                try await deletePost.mutate(invalidate: [PostsKey.list]) {
+                // refetches the list once the delete succeeds
+                await deletePost.mutate(invalidate: [PostsKey.list]) {
                     try await api.deletePost(id: post.id)
                 }
             }
@@ -239,17 +243,49 @@ struct PostDetailView: View {
 }
 ```
 
-### Optimistic updates
-
-Apply changes immediately and roll back automatically on failure:
+`mutate` doesn't throw: a failure is reported through `deletePost.error` and
+`deletePost.phase`. It returns the operation's result, or `nil` if it failed:
 
 ```swift
-try await client.mutate(PostsKey.list, operation: {
-    try await api.deletePost(id: post.id)
-}, update: { (posts: inout [Post], _) in
-    posts.removeAll { $0.id == post.id }
-})
+let saved = await createPost.mutate { try await api.createPost(draft) }
+if let saved {
+    path.append(saved.id)
+}
 ```
+
+### Optimistic updates
+
+Pass a `CacheUpdate` to change cached data before the operation runs. Observers of that
+key update immediately, and the previous value is restored if the operation fails:
+
+```swift
+await deletePost.mutate(
+    updating: .init(PostsKey.list) { (posts: inout [Post]) in
+        posts.removeAll { $0.id == post.id }
+    }
+) {
+    try await api.deletePost(id: post.id)
+}
+```
+
+Use `onSuccess` to fold the server's response into the cache, and pass several updates
+to change more than one key:
+
+```swift
+await createPost.mutate(
+    updating: .init(PostsKey.list,
+                    optimistic: { (posts: inout [Post]) in posts.append(draft) },
+                    onSuccess: { posts, saved in posts[posts.count - 1] = saved }),
+              .init(PostsKey.detail(draft.id)) { (post: inout Post) in post = draft }
+) {
+    try await api.createPost(draft)
+}
+```
+
+An update is skipped when its key has nothing cached. The closure's type must match
+the cached value — a mismatch traps in debug builds. For an `@InfiniteQuery` key that
+type is `InfiniteData<Page, PageParam>`, not the page type. Outside SwiftUI,
+`QueryClient.mutate(updating:invalidate:operation:)` does the same and throws on failure.
 
 To write to the cache directly — for example, with data you already have from
 another response — use `setQueryData`. Observers of that key update immediately:

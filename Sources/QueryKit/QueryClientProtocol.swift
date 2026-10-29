@@ -24,24 +24,9 @@ public protocol QueryClientProtocol: AnyObject & Sendable {
     func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async
 
     @discardableResult
-    func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
-        _ key: K,
-        invalidate: Bool,
-        onMutate: @Sendable (inout QueryValue) -> Void,
+    func mutate<Result: Sendable>(
+        updating updates: [CacheUpdate<Result>],
+        invalidate keys: [any QueryKey],
         operation: @Sendable () async throws -> Result
     ) async throws -> Result
-
-    @discardableResult
-    func mutate<K: QueryKey, QueryValue: Sendable, Result: Sendable>(
-        _ key: K,
-        invalidate: Bool,
-        onMutate: (@Sendable (inout QueryValue) -> Void)?,
-        onSuccess: @Sendable (inout QueryValue, Result) -> Void,
-        operation: @Sendable () async throws -> Result
-    ) async throws -> Result
-
-    func mutate<K: QueryKey, Result: Sendable>(
-        _ key: K,
-        operation: @Sendable () async throws -> Result
-    ) async throws
 }
