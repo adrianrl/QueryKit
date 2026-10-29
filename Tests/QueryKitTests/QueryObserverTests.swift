@@ -235,6 +235,26 @@ struct QueryObserverTests {
             []
         }
     }
+
+    @Test("fetch(loader:) serves a fresh cached value without calling the loader")
+    @MainActor
+    func testFetchLoaderHonoursStaleTime() async {
+        let client = QueryClient()
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: client, key: TestKey.users, staleTime: 60)
+
+        var callCount = 0
+        let loader: @Sendable () async throws -> [String] = { @MainActor in
+            callCount += 1
+            return ["from-network"]
+        }
+
+        await observer.fetch(loader: loader)
+        await observer.fetch(loader: loader)
+
+        #expect(callCount == 1)
+        #expect(observer.phase.value == ["from-network"])
+    }
 }
 
 private enum TestError: Error { case boom }

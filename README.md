@@ -84,7 +84,7 @@ if $posts.phase.isLoading {
 }
 ```
 
-When the loader depends on a SwiftUI environment value that is not available in `init`, create the query with only a key. `fetch(loader:)` stores that function and reuses it for `refresh()` and `invalidate`:
+When the loader depends on a SwiftUI environment value that is not available in `init`, create the query with only a key. `fetch(loader:)` stores that function and reuses it for `refresh()` and `invalidate`. Like `fetch()`, it honours the query's `staleTime` (a fresh cached value is returned without calling the loader); use `refresh()` to force a new request:
 
 ```swift
 struct PostDetailView: View {
