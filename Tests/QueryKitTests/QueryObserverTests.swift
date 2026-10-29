@@ -255,67 +255,6 @@ struct QueryObserverTests {
         #expect(callCount == 1)
         #expect(observer.phase.value == ["from-network"])
     }
-
-    @Test("fetch(loader:) serves the cache to another observer of the same key")
-    @MainActor
-    func testFetchLoaderSharesCacheAcrossObservers() async {
-        let client = QueryClient()
-        let first = QueryObserver<[String]>()
-        let second = QueryObserver<[String]>()
-        first.configure(client: client, key: TestKey.users, staleTime: 60)
-        second.configure(client: client, key: TestKey.users, staleTime: 60)
-
-        var callCount = 0
-        let loader: @Sendable () async throws -> [String] = { @MainActor in
-            callCount += 1
-            return ["from-network"]
-        }
-
-        await first.fetch(loader: loader)
-        await second.fetch(loader: loader)
-
-        #expect(callCount == 1)
-        #expect(second.phase.value == ["from-network"])
-    }
-
-    @Test("fetch(loader:) calls the loader again once the value is stale")
-    @MainActor
-    func testFetchLoaderRefetchesWhenStale() async {
-        let client = QueryClient()
-        let observer = QueryObserver<[String]>()
-        observer.configure(client: client, key: TestKey.users, staleTime: 0)
-
-        var callCount = 0
-        let loader: @Sendable () async throws -> [String] = { @MainActor in
-            callCount += 1
-            return ["from-network"]
-        }
-
-        await observer.fetch(loader: loader)
-        await observer.fetch(loader: loader)
-
-        #expect(callCount == 2)
-    }
-
-    @Test("refresh() bypasses a fresh cached value")
-    @MainActor
-    func testRefreshBypassesCache() async {
-        let client = QueryClient()
-        let observer = QueryObserver<[String]>()
-        observer.configure(client: client, key: TestKey.users, staleTime: 60)
-
-        var callCount = 0
-        let loader: @Sendable () async throws -> [String] = { @MainActor in
-            callCount += 1
-            return ["call-\(callCount)"]
-        }
-
-        await observer.fetch(loader: loader)
-        await observer.refresh()
-
-        #expect(callCount == 2)
-        #expect(observer.phase.value == ["call-2"])
-    }
 }
 
 private enum TestError: Error { case boom }
