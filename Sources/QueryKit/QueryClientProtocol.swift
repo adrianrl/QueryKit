@@ -1,8 +1,11 @@
 import Foundation
 
-/// Defines the interface for a query client, enabling both production and mock implementations.
+/// The interface ``RemoteQuery``, ``RemoteInfiniteQuery`` and ``Mutation`` use to reach the cache.
 ///
 /// Use ``QueryClient`` in production and ``MockQueryClient`` in SwiftUI previews and tests.
+///
+/// Only ``QueryClient`` and ``MockQueryClient`` conform to this protocol. Don't conform
+/// your own types: requirements may be added in minor releases.
 public protocol QueryClientProtocol: AnyObject & Sendable {
     func fetch<Value: Sendable>(
         key: some QueryKey,
@@ -10,18 +13,11 @@ public protocol QueryClientProtocol: AnyObject & Sendable {
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value
 
-    func fetch<Value: Sendable>(
-        key: some QueryKey,
-        loader: @Sendable @escaping () async throws -> Value
-    ) async throws -> Value
-
     func invalidate(_ key: some QueryKey) async
 
+    func invalidateAll() async
+
     func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async
-
-    func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async
-
-    func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async
 
     @discardableResult
     func mutate<Result: Sendable>(

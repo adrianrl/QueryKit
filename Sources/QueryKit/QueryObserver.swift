@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 @Observable
 public class QueryObserver<Value: Sendable> {
-    public var phase: QueryPhase<Value> = .idle
+    public internal(set) var phase: QueryPhase<Value> = .idle
 
     /// `true` while a fetch is in flight, including revalidation of a value that
     /// is already present in ``phase``.
@@ -31,7 +31,7 @@ public class QueryObserver<Value: Sendable> {
     /// ``isFetching`` while one of them is still running.
     private var inFlightCount = 0
 
-    public init() {}
+    init() {}
 
     init(
         client: any QueryClientProtocol,
@@ -63,16 +63,19 @@ public class QueryObserver<Value: Sendable> {
         self.staleTime = staleTime
 
         if keyChanged {
-            // unsubscribe old
-            if let oldKey = self.key {
-                Task {
-                    await client.unsubscribe(key: oldKey, observer: self)
+            // Only QueryClient pushes cache updates; a mock has nothing to subscribe to.
+            if let client = client as? QueryClient {
+                // unsubscribe old
+                if let oldKey = self.key {
+                    Task {
+                        await client.unsubscribe(key: oldKey, observer: self)
+                    }
                 }
-            }
 
-            // subscribe new
-            Task {
-                await client.subscribe(key: key, observer: self)
+                // subscribe new
+                Task {
+                    await client.subscribe(key: key, observer: self)
+                }
             }
 
             self.key = key

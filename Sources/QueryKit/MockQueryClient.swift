@@ -50,20 +50,11 @@ public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
         try await resolve(key: AnyHashable(key))
     }
 
-    public func fetch<Value: Sendable>(
-        key: some QueryKey,
-        loader: @Sendable @escaping () async throws -> Value
-    ) async throws -> Value {
-        try await resolve(key: AnyHashable(key))
-    }
-
     public func invalidate(_ key: some QueryKey) async {}
 
     public func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {}
 
-    public func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {}
-
-    public func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {}
+    public func invalidateAll() async {}
 
     @discardableResult
     public func mutate<Result: Sendable>(

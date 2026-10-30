@@ -36,9 +36,9 @@ struct QueryClientTests {
             return callCount
         }
 
-        _ = try await client.fetch(key: TestKey.users, loader: loader)
+        _ = try await client.fetch(key: TestKey.users, staleTime: 60, loader: loader)
         await client.invalidate(TestKey.users)
-        let value = try await client.fetch(key: TestKey.users, loader: loader)
+        let value = try await client.fetch(key: TestKey.users, staleTime: 60, loader: loader)
 
         #expect(value == 2)
     }
@@ -57,5 +57,30 @@ struct QueryClientTests {
 
         let cached = try await client.fetch(key: TestKey.users, staleTime: 60) { ["loaded"] }
         #expect(cached == ["seeded"])
+    }
+
+    @Test("invalidateAll empties the cache and refetches observed queries")
+    @MainActor
+    func testInvalidateAll() async throws {
+        let client = QueryClient()
+        let observer = QueryObserver<Int>()
+        observer.configure(client: client, key: TestKey.users, staleTime: 60)
+        await Task.yield() // let configure's subscribe Task run
+
+        var callCount = 0
+        await observer.fetch(loader: { @MainActor in
+            callCount += 1
+            return callCount
+        })
+        _ = try await client.fetch(key: TestKey.posts, staleTime: 60) { "cached" }
+
+        await client.invalidateAll()
+        // invalidation notifies observers from a Task; give it a turn, then let the refetch finish
+        for _ in 0..<5 { await Task.yield() }
+
+        #expect(callCount == 2)
+        #expect(observer.phase.value == 2)
+        let posts = try await client.fetch(key: TestKey.posts, staleTime: 60) { "reloaded" }
+        #expect(posts == "reloaded")
     }
 }
