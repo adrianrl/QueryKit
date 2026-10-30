@@ -14,7 +14,7 @@ A lightweight Swift library for data fetching and caching in SwiftUI, inspired b
 Add QueryKit to your project via Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/adrianrl/QueryKit", .upToNextMinor(from: "0.1.0"))
+.package(url: "https://github.com/adrianrl/QueryKit", .upToNextMinor(from: "0.2.0"))
 ```
 
 While QueryKit is below 1.0, breaking changes bump the minor version, so pin it with `.upToNextMinor(from:)`.
