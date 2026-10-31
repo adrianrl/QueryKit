@@ -22,11 +22,12 @@ public class QueryObserver<Value: Sendable> {
     /// ``QueryPhase/failure(_:)`` and carries the same error.
     public internal(set) var error: Error?
 
-    var client: (any QueryClientProtocol)?
-    var key: (any QueryKey)?
-    private var staleTime: TimeInterval?
-    private var gcTime: TimeInterval?
-    private var loader: (@Sendable () async throws -> Value)?
+    // Configuration, rewritten by every SwiftUI update(): observing it would re-render forever.
+    @ObservationIgnored var client: (any QueryClientProtocol)?
+    @ObservationIgnored var key: (any QueryKey)?
+    @ObservationIgnored private var staleTime: TimeInterval?
+    @ObservationIgnored private var gcTime: TimeInterval?
+    @ObservationIgnored private var loader: (@Sendable () async throws -> Value)?
 
     /// Number of fetches in flight, so overlapping fetches don't clear
     /// ``isFetching`` while one of them is still running.
