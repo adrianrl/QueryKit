@@ -36,6 +36,22 @@ struct MutationTests {
         #expect(observer.error is TestError)
     }
 
+    @Test("reset returns to idle and clears the error")
+    @MainActor
+    func testReset() async {
+        let observer = MutationObserver<Int>()
+        observer.configure(client: QueryClient())
+
+        await observer.mutate { throw TestError.failed }
+        #expect(observer.error is TestError)
+
+        observer.reset()
+
+        #expect(observer.error == nil)
+        #expect(observer.phase.value == nil)
+        if case .idle = observer.phase {} else { Issue.record("Expected idle after reset") }
+    }
+
     @Test("Without a client, mutate doesn't run and phase stays idle")
     @MainActor
     func testNoClient() async {

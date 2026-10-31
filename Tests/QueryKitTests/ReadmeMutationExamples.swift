@@ -29,6 +29,9 @@ private struct PostDetailView: View {
             }
         }
         .disabled(deletePost.isLoading)
+        .alert("Couldn't delete the post", isPresented: .constant(deletePost.error != nil)) {
+            Button("OK") { deletePost.reset() }
+        }
     }
 
     func examples() async {

@@ -40,7 +40,7 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
     func configure(
         client: any QueryClientProtocol,
         key: any QueryKey,
-        staleTime: TimeInterval,
+        staleTime: TimeInterval?,
         gcTime: TimeInterval? = nil,
         initialPageParam: PageParam,
         getNextPageParam: @escaping NextPageParam,
@@ -77,7 +77,11 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
         defer { isFetchingNextPage = false }
 
         do {
-            let page = try await pageLoader(param)
+            // Through the client, so observers of the same list share one load and a mock never runs it.
+            let pageKey = PageKey(list: key, index: phase.value?.pages.count ?? 0)
+            let page = try await client.fetch(key: pageKey, staleTime: 0) { try await pageLoader(param) }
+            // The page lives in the list's entry; don't keep a second copy.
+            await client.invalidate(pageKey)
 
             // Re-read after the await: a refetch may have replaced the list while
             // this page loaded. Only append to a list that still ends where it begins.
@@ -110,5 +114,20 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
         }
 
         return data
+    }
+}
+
+/// One page load of an infinite query, as a key of its own in the client.
+private struct PageKey: QueryKey {
+    let list: any QueryKey
+    let index: Int
+
+    static func == (lhs: PageKey, rhs: PageKey) -> Bool {
+        AnyHashable(lhs.list) == AnyHashable(rhs.list) && lhs.index == rhs.index
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(AnyHashable(list))
+        hasher.combine(index)
     }
 }

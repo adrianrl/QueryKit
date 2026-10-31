@@ -83,4 +83,40 @@ struct QueryClientTests {
         let posts = try await client.fetch(key: TestKey.posts, staleTime: 60) { "reloaded" }
         #expect(posts == "reloaded")
     }
+
+    @Test("A query's staleTime wins over the client's defaultStaleTime")
+    @MainActor
+    func testStaleTimePrecedence() async throws {
+        let client = QueryClient(defaultStaleTime: 0)
+        var callCount = 0
+        let loader: @Sendable () async throws -> Int = { @MainActor in
+            callCount += 1
+            return callCount
+        }
+
+        // nil falls back to defaultStaleTime (0): every fetch calls the loader
+        _ = try await client.fetch(key: TestKey.users, loader: loader)
+        _ = try await client.fetch(key: TestKey.users, loader: loader)
+        #expect(callCount == 2)
+
+        // an explicit staleTime is honoured even though the default is 0
+        _ = try await client.fetch(key: TestKey.users, staleTime: 60, loader: loader)
+        #expect(callCount == 2)
+    }
+
+    @Test("overrideStaleTime wins over a query's own staleTime")
+    @MainActor
+    func testOverrideStaleTime() async throws {
+        let client = QueryClient(seed: [TestKey.users: ["seeded"]], overrideStaleTime: .infinity)
+        var callCount = 0
+        let loader: @Sendable () async throws -> [String] = { @MainActor in
+            callCount += 1
+            return ["network"]
+        }
+
+        let value = try await client.fetch(key: TestKey.users, staleTime: 0, loader: loader)
+
+        #expect(value == ["seeded"])
+        #expect(callCount == 0)
+    }
 }

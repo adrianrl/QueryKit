@@ -8,6 +8,11 @@ import Foundation
 /// - `.loading` — never resolves, leaving the observer in the loading state
 /// - `.idle` — never resolves, leaving the observer in the idle state
 ///
+/// A mutation's `updating:` changes are applied to `.success` values and shown in every view
+/// observing that key, so a preview reflects an optimistic delete or edit. `invalidate:` and
+/// ``invalidateAll()`` are ignored: refetching would bring back the stubbed value.
+/// ``InfiniteQueryObserver/fetchNextPage()`` stays loading, since only the stubbed pages exist.
+///
 /// Use the ``View/queryPreview(_:phase:)`` modifier for a convenient SwiftUI integration.
 public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
     private enum AnyPhase {
@@ -18,6 +23,9 @@ public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
     }
 
     private var phases: [AnyHashable: AnyPhase] = [:]
+
+    /// Holds `.success` values once read, so mutations can change them and observers see it.
+    let cache = QueryClient(defaultGCTime: .infinity)
 
     public init() {}
 
@@ -44,15 +52,18 @@ public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
 
     public func fetch<Value: Sendable>(
         key: some QueryKey,
-        staleTime: TimeInterval,
+        staleTime: TimeInterval?,
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value {
-        try await resolve(key: AnyHashable(key))
+        let stubbed: Value = try await resolve(key: AnyHashable(key))
+        return try await cache.fetch(key: key, staleTime: .infinity) { stubbed }
     }
 
     public func invalidate(_ key: some QueryKey) async {}
 
-    public func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {}
+    public func setQueryData<K: QueryKey, Value: Sendable>(_ key: K, value: Value) async {
+        await cache.setQueryData(key, value: value)
+    }
 
     public func invalidateAll() async {}
 
@@ -62,7 +73,7 @@ public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
         invalidate keys: [any QueryKey],
         operation: @Sendable () async throws -> Result
     ) async throws -> Result {
-        try await operation()
+        try await cache.mutate(updating: updates, operation: operation)
     }
 
     // MARK: - Private

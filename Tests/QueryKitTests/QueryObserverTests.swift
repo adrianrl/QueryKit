@@ -1,3 +1,4 @@
+import Observation
 import Testing
 
 @testable import QueryKit
@@ -254,6 +255,45 @@ struct QueryObserverTests {
 
         #expect(callCount == 1)
         #expect(observer.phase.value == ["from-network"])
+    }
+
+    @Test("Re-configuring with the same inputs doesn't invalidate the view")
+    @MainActor
+    func testReconfigureDoesNotInvalidate() {
+        final class Flag: @unchecked Sendable { var fired = false }
+        let client = QueryClient()
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: client, key: TestKey.users, staleTime: 60) { [] }
+
+        // SwiftUI runs update(), and so configure, inside the body's observation tracking.
+        let flag = Flag()
+        withObservationTracking {
+            observer.configure(client: client, key: TestKey.users, staleTime: 60) { [] }
+        } onChange: {
+            flag.fired = true
+        }
+        observer.configure(client: client, key: TestKey.users, staleTime: 60) { [] }
+
+        #expect(!flag.fired)
+    }
+
+    @Test("Changing the client moves the subscription to the new one")
+    @MainActor
+    func testClientChangeResubscribes() async {
+        let first = QueryClient()
+        let second = QueryClient()
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: first, key: TestKey.users, staleTime: 60)
+        for _ in 0..<5 { await Task.yield() }
+
+        observer.configure(client: second, key: TestKey.users, staleTime: 60)
+        for _ in 0..<5 { await Task.yield() }
+
+        await first.setQueryData(TestKey.users, value: ["from-first"])
+        #expect(observer.phase.value == nil)
+
+        await second.setQueryData(TestKey.users, value: ["from-second"])
+        #expect(observer.phase.value == ["from-second"])
     }
 
     @Test("A stale cached value is shown while it reloads")

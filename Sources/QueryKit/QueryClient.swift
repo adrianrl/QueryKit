@@ -14,6 +14,7 @@ public actor QueryClient: QueryClientProtocol {
 
     private var cache: [AnyHashable: AnyCacheEntry] = [:]
     private var runningTasks: [AnyHashable: Task<any Sendable, Error>] = [:]
+    private let defaultStaleTime: TimeInterval
     private let overrideStaleTime: TimeInterval?
 
     private let defaultGCTime: TimeInterval
@@ -25,14 +26,20 @@ public actor QueryClient: QueryClientProtocol {
 
     /// Creates a new ``QueryClient`` instance.
     ///
+    /// - Parameter defaultStaleTime: How long, in seconds, a loaded value is served from the
+    ///   cache without calling the loader, for queries that don't set their own `staleTime`.
     /// - Parameter defaultGCTime: How long, in seconds, a cached value is kept once no
     ///   query observes its key. A query can ask for longer with its own `gcTime`.
     ///   Pass `.infinity` to never evict.
-    /// - Parameter overrideStaleTime: An optional time interval that, if provided,
-    ///   will override the stale time for all entries in this client. This is
-    ///   useful for testing scenarios where you want to control cache expiration.
-    ///   If `nil`, the stale time specified in each query will be used.
-    public init(defaultGCTime: TimeInterval = 300, overrideStaleTime: TimeInterval? = nil) {
+    /// - Parameter overrideStaleTime: If set, replaces every query's `staleTime`, including
+    ///   ones set explicitly. Meant for tests, e.g. `.infinity` so seeded values are never
+    ///   reloaded. Previews should use ``MockQueryClient`` instead.
+    public init(
+        defaultStaleTime: TimeInterval = 60,
+        defaultGCTime: TimeInterval = 300,
+        overrideStaleTime: TimeInterval? = nil
+    ) {
+        self.defaultStaleTime = defaultStaleTime
         self.defaultGCTime = defaultGCTime
         self.overrideStaleTime = overrideStaleTime
     }
@@ -45,14 +52,16 @@ public actor QueryClient: QueryClientProtocol {
     /// - Parameter seed: A dictionary mapping ``QueryKey`` values to their
     ///   corresponding cached values. Each entry is stored with a timestamp
     ///   of the current date and time.
-    /// - Parameter overrideStaleTime: An optional time interval that, if provided,
-    ///   will override the stale time for all entries in this client. This is
-    ///   useful for testing scenarios where you want to control cache expiration.
-    ///   If `nil`, the stale time specified in each query will be used.
+    /// - Parameter defaultStaleTime: How long, in seconds, a value is served from the cache
+    ///   without calling the loader, for queries that don't set their own `staleTime`.
+    ///   Seeded values count from creation.
     /// - Parameter defaultGCTime: How long, in seconds, a cached value is kept once no
     ///   query observes its key. Seeded values count from creation.
+    /// - Parameter overrideStaleTime: If set, replaces every query's `staleTime`, including
+    ///   ones set explicitly. Pass `.infinity` in tests so seeded values are never reloaded.
     public init<K: QueryKey>(
         seed: [K: any Sendable],
+        defaultStaleTime: TimeInterval = 60,
         defaultGCTime: TimeInterval = 300,
         overrideStaleTime: TimeInterval? = nil
     ) {
@@ -60,6 +69,7 @@ public actor QueryClient: QueryClientProtocol {
             cache[AnyHashable(key)] = AnyCacheEntry(value: value, timestamp: Date())
         }
 
+        self.defaultStaleTime = defaultStaleTime
         self.defaultGCTime = defaultGCTime
         self.overrideStaleTime = overrideStaleTime
 
@@ -67,9 +77,13 @@ public actor QueryClient: QueryClientProtocol {
         Task { await self.scheduleGC(for: keys) }
     }
 
+    /// Returns the cached value for `key` while it is younger than `staleTime`, or loads it.
+    ///
+    /// - Parameter staleTime: `nil` uses the client's `defaultStaleTime`. The client's
+    ///   `overrideStaleTime`, when set, wins over both.
     public func fetch<Value: Sendable>(
         key: some QueryKey,
-        staleTime: TimeInterval = 60,
+        staleTime: TimeInterval? = nil,
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value {
         try await fetch(key: AnyHashable(key), staleTime: staleTime, loader: loader)
@@ -77,11 +91,11 @@ public actor QueryClient: QueryClientProtocol {
 
     func fetch<Value: Sendable>(
         key: AnyHashable,
-        staleTime: TimeInterval = 60,
+        staleTime: TimeInterval?,
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value {
         // Return valid cache
-        let effectiveStaleTime = overrideStaleTime ?? staleTime
+        let effectiveStaleTime = overrideStaleTime ?? staleTime ?? defaultStaleTime
         if let entry = cache[key],
            let value = entry.value as? Value,
            Date().timeIntervalSince(entry.timestamp) < effectiveStaleTime {

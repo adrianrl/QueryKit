@@ -9,7 +9,7 @@ import Foundation
 public protocol QueryClientProtocol: AnyObject & Sendable {
     func fetch<Value: Sendable>(
         key: some QueryKey,
-        staleTime: TimeInterval,
+        staleTime: TimeInterval?,
         loader: @Sendable @escaping () async throws -> Value
     ) async throws -> Value
 
@@ -25,4 +25,11 @@ public protocol QueryClientProtocol: AnyObject & Sendable {
         invalidate keys: [any QueryKey],
         operation: @Sendable () async throws -> Result
     ) async throws -> Result
+}
+
+extension QueryClientProtocol {
+    /// The cache observers subscribe to: the client itself, or the one behind a ``MockQueryClient``.
+    var store: QueryClient? {
+        self as? QueryClient ?? (self as? MockQueryClient)?.cache
+    }
 }

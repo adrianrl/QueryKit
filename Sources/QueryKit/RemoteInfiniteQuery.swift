@@ -9,7 +9,7 @@ public struct RemoteInfiniteQuery<Page: Sendable, PageParam: Sendable & Equatabl
     @State private var observer = Observer()
 
     private let key: any QueryKey
-    private let staleTime: TimeInterval
+    private let staleTime: TimeInterval?
     private let gcTime: TimeInterval?
     private let initialPageParam: PageParam
     private let getNextPageParam: Observer.NextPageParam
@@ -25,7 +25,7 @@ public struct RemoteInfiniteQuery<Page: Sendable, PageParam: Sendable & Equatabl
 
     public init(
         _ key: any QueryKey,
-        staleTime: TimeInterval = 60,
+        staleTime: TimeInterval? = nil,
         gcTime: TimeInterval? = nil,
         initialPageParam: PageParam,
         getNextPageParam: @escaping Observer.NextPageParam,
