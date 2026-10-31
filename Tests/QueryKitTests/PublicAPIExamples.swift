@@ -11,3 +11,22 @@ private struct SignOutButton: View {
         }
     }
 }
+
+private enum PostsKey: QueryKey { case list }
+
+private struct CacheLifetimeExamples: View {
+    let queryClient = QueryClient(defaultGCTime: 600)
+
+    @RemoteQuery(PostsKey.list, gcTime: 1800, loader: { [1, 2] })
+    private var posts
+
+    @RemoteInfiniteQuery(
+        PostsKey.list,
+        gcTime: .infinity,
+        initialPageParam: 1,
+        getNextPageParam: { _, _, _ in nil },
+        loader: { page in [page] }
+    ) private var feed
+
+    var body: some View { Text("\(posts?.count ?? 0)") }
+}

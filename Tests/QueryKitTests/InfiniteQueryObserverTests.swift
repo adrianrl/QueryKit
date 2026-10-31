@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import Testing
 
@@ -13,12 +14,16 @@ struct InfiniteQueryObserverTests {
         var delay: [Int: Duration] = [:]
         var failing: Set<Int> = []
 
-        func makeObserver(client: QueryClient, initialPageParam: Int = 1) -> InfiniteQueryObserver<[String], Int> {
+        func makeObserver(
+            client: QueryClient,
+            initialPageParam: Int = 1,
+            staleTime: TimeInterval = 60
+        ) -> InfiniteQueryObserver<[String], Int> {
             let observer = InfiniteQueryObserver<[String], Int>()
             observer.configure(
                 client: client,
                 key: TestKey.posts,
-                staleTime: 60,
+                staleTime: staleTime,
                 initialPageParam: initialPageParam,
                 getNextPageParam: { _, _, last in last < 3 ? last + 1 : nil },
                 pageLoader: { @MainActor page in
@@ -44,6 +49,24 @@ struct InfiniteQueryObserverTests {
         #expect(observer.phase.value == InfiniteData(pages: [["1"]], pageParams: [1]))
         #expect(observer.hasNextPage)
         #expect(!observer.isFetchingNextPage)
+    }
+
+    @Test("A new observer of stale pages shows them and reloads every one")
+    func stalePagesReloaded() async {
+        let client = QueryClient(seed: [
+            TestKey.posts: InfiniteData<[String], Int>(pages: [["old1"], ["old2"]], pageParams: [1, 2])
+        ])
+        let pages = Pages()
+        pages.delay[1] = .milliseconds(50)
+        let observer = pages.makeObserver(client: client, staleTime: 0)
+
+        let fetch = Task { await observer.fetch() }
+        try? await Task.sleep(for: .milliseconds(10))
+        #expect(observer.phase.value?.pages == [["old1"], ["old2"]])
+
+        await fetch.value
+        #expect(pages.loaded == [1, 2])
+        #expect(observer.phase.value == InfiniteData(pages: [["1"], ["2"]], pageParams: [1, 2]))
     }
 
     @Test("fetchNextPage appends until getNextPageParam returns nil")

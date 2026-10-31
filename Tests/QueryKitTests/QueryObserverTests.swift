@@ -255,6 +255,45 @@ struct QueryObserverTests {
         #expect(callCount == 1)
         #expect(observer.phase.value == ["from-network"])
     }
+
+    @Test("A stale cached value is shown while it reloads")
+    @MainActor
+    func testStaleValueShownWhileReloading() async {
+        let client = QueryClient(seed: [TestKey.users: ["old"]])
+        let gate = Gate()
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: client, key: TestKey.users, staleTime: 0)
+
+        let fetch = Task {
+            await observer.fetch {
+                await gate.wait()
+                return ["new"]
+            }
+        }
+        await gate.waitUntilEntered()
+
+        #expect(observer.phase.value == ["old"])
+        #expect(observer.isFetching)
+
+        await gate.open()
+        await fetch.value
+
+        #expect(observer.phase.value == ["new"])
+        #expect(!observer.isFetching)
+    }
+
+    @Test("A failed reload of a stale value keeps it and reports the error")
+    @MainActor
+    func testStaleValueKeptOnFailedReload() async {
+        let client = QueryClient(seed: [TestKey.users: ["old"]])
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: client, key: TestKey.users, staleTime: 0)
+
+        await observer.fetch { throw TestError.boom }
+
+        #expect(observer.phase.value == ["old"])
+        #expect(observer.error is TestError)
+    }
 }
 
 private enum TestError: Error { case boom }

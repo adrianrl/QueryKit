@@ -8,6 +8,7 @@ public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
 
     private let key: any QueryKey
     private let staleTime: TimeInterval
+    private let gcTime: TimeInterval?
     private let loader: (@Sendable () async throws -> Value)?
 
     public var wrappedValue: Value? {
@@ -18,22 +19,28 @@ public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
         observer
     }
 
+    /// - Parameter gcTime: How long, in seconds, the cached value is kept once no view
+    ///   observes `key`. `nil` uses the client's `defaultGCTime`.
     public init(
         _ key: any QueryKey,
         staleTime: TimeInterval = 60,
+        gcTime: TimeInterval? = nil,
         loader: @Sendable @escaping () async throws -> Value
     ) {
         self.key = key
         self.staleTime = staleTime
+        self.gcTime = gcTime
         self.loader = loader
     }
 
     public init(
         _ key: any QueryKey,
-        staleTime: TimeInterval = 60
+        staleTime: TimeInterval = 60,
+        gcTime: TimeInterval? = nil
     ) {
         self.key = key
         self.staleTime = staleTime
+        self.gcTime = gcTime
         self.loader = nil
     }
 
@@ -42,6 +49,7 @@ public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
             client: client,
             key: key,
             staleTime: staleTime,
+            gcTime: gcTime,
             loader: loader
         )
     }
