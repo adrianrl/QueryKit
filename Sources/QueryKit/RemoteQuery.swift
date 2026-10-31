@@ -7,7 +7,7 @@ public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
     @State private var observer = QueryObserver<Value>()
 
     private let key: any QueryKey
-    private let staleTime: TimeInterval
+    private let staleTime: TimeInterval?
     private let gcTime: TimeInterval?
     private let loader: (@Sendable () async throws -> Value)?
 
@@ -19,11 +19,13 @@ public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
         observer
     }
 
+    /// - Parameter staleTime: How long, in seconds, a loaded value is served from the cache
+    ///   without calling `loader`. `nil` uses the client's `defaultStaleTime`.
     /// - Parameter gcTime: How long, in seconds, the cached value is kept once no view
     ///   observes `key`. `nil` uses the client's `defaultGCTime`.
     public init(
         _ key: any QueryKey,
-        staleTime: TimeInterval = 60,
+        staleTime: TimeInterval? = nil,
         gcTime: TimeInterval? = nil,
         loader: @Sendable @escaping () async throws -> Value
     ) {
@@ -35,7 +37,7 @@ public struct RemoteQuery<Value: Sendable>: @preconcurrency DynamicProperty {
 
     public init(
         _ key: any QueryKey,
-        staleTime: TimeInterval = 60,
+        staleTime: TimeInterval? = nil,
         gcTime: TimeInterval? = nil
     ) {
         self.key = key

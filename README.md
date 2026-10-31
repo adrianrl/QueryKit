@@ -39,6 +39,8 @@ struct MyApp: App {
 }
 ```
 
+Views that find no injected client use `QueryClient.shared`, so they still share one cache.
+
 ### Fetching data
 
 Define a `QueryKey` to identify your query in the cache:
@@ -192,12 +194,14 @@ straight away and reloads it, reporting the reload through `isFetching`, as in
 
 ```swift
 // for every query
-let queryClient = QueryClient(defaultGCTime: 600)
+let queryClient = QueryClient(defaultStaleTime: 30, defaultGCTime: 600)
 
-// for one query: keep the feed for 30 minutes
-@RemoteQuery(PostsKey.list, gcTime: 1800, loader: { try await API.shared.fetchPosts() })
+// for one query: fresh for 2 minutes, kept for 30
+@RemoteQuery(PostsKey.list, staleTime: 120, gcTime: 1800, loader: { try await API.shared.fetchPosts() })
 private var posts
 ```
+
+A query's own `staleTime` or `gcTime` wins over the client's default.
 
 Keep `gcTime` longer than `staleTime`. A shorter `gcTime` removes values that are still
 fresh once no view shows them, so returning to the screen reloads data that didn't need
@@ -286,6 +290,14 @@ if let saved {
 }
 ```
 
+Call `reset()` to go back to `.idle`, for example when the user dismisses an error:
+
+```swift
+.alert("Couldn't delete the post", isPresented: .constant(deletePost.error != nil)) {
+    Button("OK") { deletePost.reset() }
+}
+```
+
 ### Optimistic updates
 
 Pass a `CacheUpdate` to change cached data before the operation runs. Observers of that
@@ -340,7 +352,7 @@ Button("Sign out") {
 
 ### SwiftUI Previews
 
-Use the `.queryPreview` modifier to inject a `MockQueryClient` with pre-configured phases for each key, without modifying your views:
+Use the `.queryPreview` modifier to inject a `MockQueryClient` with pre-configured phases for each key, without modifying your views. Mutations in a preview apply their `updating:` changes to `.success` stubs, so an optimistic delete or edit shows up on screen:
 
 ```swift
 #Preview("Success") {

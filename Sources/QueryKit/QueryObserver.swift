@@ -36,7 +36,7 @@ public class QueryObserver<Value: Sendable> {
 
     // Starts the client's eviction timer for this key once no view observes it.
     isolated deinit {
-        guard let client = client as? QueryClient, let key else { return }
+        guard let client = client?.store, let key else { return }
 
         Task { [key] in await client.observerDidLeave(key: key) }
     }
@@ -44,7 +44,7 @@ public class QueryObserver<Value: Sendable> {
     init(
         client: any QueryClientProtocol,
         key: any QueryKey,
-        staleTime: TimeInterval,
+        staleTime: TimeInterval?,
         loader: @Sendable @escaping () async throws -> Value
     ) {
         self.client = client
@@ -56,7 +56,7 @@ public class QueryObserver<Value: Sendable> {
     func configure(
         client: any QueryClientProtocol,
         key: any QueryKey,
-        staleTime: TimeInterval,
+        staleTime: TimeInterval?,
         gcTime: TimeInterval? = nil,
         loader: (@Sendable () async throws -> Value)? = nil
     ) {
@@ -68,26 +68,29 @@ public class QueryObserver<Value: Sendable> {
             keyChanged = true
         }
 
+        // The cache that pushes updates: the client itself, or the one behind a mock.
+        let oldStore = self.client?.store
+        let newStore = client.store
+
         self.client = client
         self.staleTime = staleTime
         self.gcTime = gcTime
 
-        if keyChanged {
-            // Only QueryClient pushes cache updates; a mock has nothing to subscribe to.
-            if let client = client as? QueryClient {
-                // unsubscribe old
-                if let oldKey = self.key {
-                    Task {
-                        await client.unsubscribe(key: oldKey, observer: self)
-                    }
-                }
-
-                // subscribe new
+        if keyChanged || oldStore !== newStore {
+            if let oldStore, let oldKey = self.key {
                 Task {
-                    await client.subscribe(key: key, observer: self, gcTime: gcTime)
+                    await oldStore.unsubscribe(key: oldKey, observer: self)
                 }
             }
 
+            if let newStore {
+                Task {
+                    await newStore.subscribe(key: key, observer: self, gcTime: gcTime)
+                }
+            }
+        }
+
+        if keyChanged {
             self.key = key
             self.loader = loader
             phase = .idle
@@ -103,10 +106,10 @@ public class QueryObserver<Value: Sendable> {
     /// value goes to ``phase`` first and is replaced when the reload finishes, which is
     /// reported through ``isFetching``.
     public func fetch() async {
-        guard let client, let key, let staleTime, let loader else { return }
+        guard let client, let key, let loader else { return }
 
         if phase.value == nil,
-           let client = client as? QueryClient,
+           let client = client.store,
            let cached = await client.cachedValue(for: key) as? Value {
             phase = .success(cached)
         }

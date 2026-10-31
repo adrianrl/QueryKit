@@ -256,6 +256,25 @@ struct QueryObserverTests {
         #expect(observer.phase.value == ["from-network"])
     }
 
+    @Test("Changing the client moves the subscription to the new one")
+    @MainActor
+    func testClientChangeResubscribes() async {
+        let first = QueryClient()
+        let second = QueryClient()
+        let observer = QueryObserver<[String]>()
+        observer.configure(client: first, key: TestKey.users, staleTime: 60)
+        for _ in 0..<5 { await Task.yield() }
+
+        observer.configure(client: second, key: TestKey.users, staleTime: 60)
+        for _ in 0..<5 { await Task.yield() }
+
+        await first.setQueryData(TestKey.users, value: ["from-first"])
+        #expect(observer.phase.value == nil)
+
+        await second.setQueryData(TestKey.users, value: ["from-second"])
+        #expect(observer.phase.value == ["from-second"])
+    }
+
     @Test("A stale cached value is shown while it reloads")
     @MainActor
     func testStaleValueShownWhileReloading() async {

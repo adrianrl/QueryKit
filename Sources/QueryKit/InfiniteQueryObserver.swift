@@ -40,7 +40,7 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
     func configure(
         client: any QueryClientProtocol,
         key: any QueryKey,
-        staleTime: TimeInterval,
+        staleTime: TimeInterval?,
         gcTime: TimeInterval? = nil,
         initialPageParam: PageParam,
         getNextPageParam: @escaping NextPageParam,

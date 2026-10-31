@@ -15,9 +15,9 @@ private struct SignOutButton: View {
 private enum PostsKey: QueryKey { case list }
 
 private struct CacheLifetimeExamples: View {
-    let queryClient = QueryClient(defaultGCTime: 600)
+    let queryClient = QueryClient(defaultStaleTime: 30, defaultGCTime: 600)
 
-    @RemoteQuery(PostsKey.list, gcTime: 1800, loader: { [1, 2] })
+    @RemoteQuery(PostsKey.list, staleTime: 120, gcTime: 1800, loader: { [1, 2] })
     private var posts
 
     @RemoteInfiniteQuery(

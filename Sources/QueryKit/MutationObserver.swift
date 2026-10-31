@@ -20,6 +20,14 @@ public final class MutationObserver<Value: Sendable> {
         self.client = client
     }
 
+    /// Returns to ``MutationPhase/idle``, clearing the last result or ``error``.
+    ///
+    /// Use it to dismiss an error alert or to reuse a form after saving. It doesn't touch
+    /// the cache, and a mutation already in flight still updates ``phase`` when it ends.
+    public func reset() {
+        phase = .idle
+    }
+
     /// Runs `operation`, applying `updates` to the cache around it and invalidating `keys` on success.
     ///
     /// Doesn't throw: a failure is reported through ``phase`` and ``error``, and any
