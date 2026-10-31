@@ -97,8 +97,19 @@ public class QueryObserver<Value: Sendable> {
         }
     }
 
+    /// Loads the query, or returns the cached value while it is younger than `staleTime`.
+    ///
+    /// When nothing is shown yet and the cache holds an expired value for the key, that
+    /// value goes to ``phase`` first and is replaced when the reload finishes, which is
+    /// reported through ``isFetching``.
     public func fetch() async {
         guard let client, let key, let staleTime, let loader else { return }
+
+        if phase.value == nil,
+           let client = client as? QueryClient,
+           let cached = await client.cachedValue(for: key) as? Value {
+            phase = .success(cached)
+        }
 
         await performFetch {
             try await client.fetch(

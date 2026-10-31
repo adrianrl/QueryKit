@@ -134,8 +134,9 @@ struct PostSearchResultsView: View {
 ### Revalidation
 
 `phase` only reports `.loading` when there is no value to show. Once a query has
-succeeded, a refetch keeps the previous value in `phase` and reports itself
-through `isFetching`, so the list doesn't disappear on every refresh:
+succeeded, or a view opens on a stale cached value (see
+[Cache lifetime](#cache-lifetime)), a refetch keeps that value in `phase` and reports
+itself through `isFetching`, so the list doesn't disappear on every refresh:
 
 ```swift
 struct PostsView: View {
@@ -176,10 +177,18 @@ on top of already-loaded data.
 
 ### Cache lifetime
 
-`staleTime` decides when a cached value is refetched; `gcTime` decides when it is
-removed. Once no view observes a key, its value is kept for `gcTime` seconds and then
-dropped, so a screen reopened after that starts from `.loading`. A view that observes
-the key again before then cancels the removal. The default is 5 minutes:
+Two timers decide what happens to a cached value:
+
+- `staleTime` (60 seconds by default) counts from when the value was loaded. While it
+  is younger than that, `fetch()` returns it without calling the loader.
+- `gcTime` (5 minutes by default) counts from when the last view observing the key
+  went away. When it runs out, the value is removed. A view that observes the key again
+  before then cancels the removal.
+
+A view that opens on a key whose value is stale but not yet removed shows that value
+straight away and reloads it, reporting the reload through `isFetching`, as in
+[Revalidation](#revalidation). Once the value is removed, the view starts from
+`.loading`.
 
 ```swift
 // for every query
@@ -190,7 +199,11 @@ let queryClient = QueryClient(defaultGCTime: 600)
 private var posts
 ```
 
-When several views observe a key with different values, the longest wins. Pass
+Keep `gcTime` longer than `staleTime`. A shorter `gcTime` removes values that are still
+fresh once no view shows them, so returning to the screen reloads data that didn't need
+it.
+
+When several views observe a key with different values, the longest `gcTime` wins. Pass
 `.infinity` to never remove a value. Values written with `setQueryData` or the `seed:`
 initializer count from when they are written, as if no view had observed them.
 

@@ -173,6 +173,11 @@ extension QueryClient {
         scheduleGC(for: [hash])
     }
 
+    /// The cached value for `key`, however old, so an observer can show it while it reloads.
+    func cachedValue(for key: any QueryKey) -> (any Sendable)? {
+        cache[AnyHashable(key)]?.value
+    }
+
     /// Called from an observer's `deinit`, when its weak box has already been zeroed.
     func observerDidLeave(key: any QueryKey) {
         scheduleGC(for: [AnyHashable(key)])
