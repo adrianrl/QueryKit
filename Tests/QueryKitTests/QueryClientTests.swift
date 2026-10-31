@@ -103,4 +103,20 @@ struct QueryClientTests {
         _ = try await client.fetch(key: TestKey.users, staleTime: 60, loader: loader)
         #expect(callCount == 2)
     }
+
+    @Test("overrideStaleTime wins over a query's own staleTime")
+    @MainActor
+    func testOverrideStaleTime() async throws {
+        let client = QueryClient(seed: [TestKey.users: ["seeded"]], overrideStaleTime: .infinity)
+        var callCount = 0
+        let loader: @Sendable () async throws -> [String] = { @MainActor in
+            callCount += 1
+            return ["network"]
+        }
+
+        let value = try await client.fetch(key: TestKey.users, staleTime: 0, loader: loader)
+
+        #expect(value == ["seeded"])
+        #expect(callCount == 0)
+    }
 }

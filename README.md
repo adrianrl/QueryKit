@@ -203,6 +203,16 @@ private var posts
 
 A query's own `staleTime` or `gcTime` wins over the client's default.
 
+In tests, `overrideStaleTime` replaces every query's `staleTime`, including ones set
+explicitly. Pass `.infinity` so seeded values are never reloaded:
+
+```swift
+let client = QueryClient(seed: [PostsKey.list: [Post.mock]], overrideStaleTime: .infinity)
+```
+
+Previews should use `.queryPreview` instead (see [SwiftUI Previews](#swiftui-previews)),
+which never calls a loader.
+
 Keep `gcTime` longer than `staleTime`. A shorter `gcTime` removes values that are still
 fresh once no view shows them, so returning to the screen reloads data that didn't need
 it.
