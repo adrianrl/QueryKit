@@ -16,3 +16,8 @@ public struct Mutation<Value: Sendable>: @preconcurrency DynamicProperty {
         observer.configure(client: client)
     }
 }
+
+extension Mutation where Value == Void {
+    /// Lets a mutation that returns nothing be declared as `@Mutation` instead of `@Mutation<Void>`.
+    public init() {}
+}

@@ -12,7 +12,7 @@ private extension EnvironmentValues { @Entry var api = API() }
 
 private struct PostDetailView: View {
     @Environment(\.api) private var api
-    @Mutation<Void> private var deletePost
+    @Mutation private var deletePost
     @Mutation<Post> private var createPost
     @State private var path: [Int] = []
 
