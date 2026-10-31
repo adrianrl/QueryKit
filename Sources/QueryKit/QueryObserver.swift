@@ -25,6 +25,7 @@ public class QueryObserver<Value: Sendable> {
     var client: (any QueryClientProtocol)?
     var key: (any QueryKey)?
     private var staleTime: TimeInterval?
+    private var gcTime: TimeInterval?
     private var loader: (@Sendable () async throws -> Value)?
 
     /// Number of fetches in flight, so overlapping fetches don't clear
@@ -32,6 +33,13 @@ public class QueryObserver<Value: Sendable> {
     private var inFlightCount = 0
 
     init() {}
+
+    // Starts the client's eviction timer for this key once no view observes it.
+    isolated deinit {
+        guard let client = client as? QueryClient, let key else { return }
+
+        Task { [key] in await client.observerDidLeave(key: key) }
+    }
 
     init(
         client: any QueryClientProtocol,
@@ -49,6 +57,7 @@ public class QueryObserver<Value: Sendable> {
         client: any QueryClientProtocol,
         key: any QueryKey,
         staleTime: TimeInterval,
+        gcTime: TimeInterval? = nil,
         loader: (@Sendable () async throws -> Value)? = nil
     ) {
         let keyChanged: Bool
@@ -61,6 +70,7 @@ public class QueryObserver<Value: Sendable> {
 
         self.client = client
         self.staleTime = staleTime
+        self.gcTime = gcTime
 
         if keyChanged {
             // Only QueryClient pushes cache updates; a mock has nothing to subscribe to.
@@ -74,7 +84,7 @@ public class QueryObserver<Value: Sendable> {
 
                 // subscribe new
                 Task {
-                    await client.subscribe(key: key, observer: self)
+                    await client.subscribe(key: key, observer: self, gcTime: gcTime)
                 }
             }
 

@@ -174,6 +174,26 @@ When the failure happens with no value to fall back on â€” a failed first load â
 handles the empty states, and `isFetching` / `error` handle everything that happens
 on top of already-loaded data.
 
+### Cache lifetime
+
+`staleTime` decides when a cached value is refetched; `gcTime` decides when it is
+removed. Once no view observes a key, its value is kept for `gcTime` seconds and then
+dropped, so a screen reopened after that starts from `.loading`. A view that observes
+the key again before then cancels the removal. The default is 5 minutes:
+
+```swift
+// for every query
+let queryClient = QueryClient(defaultGCTime: 600)
+
+// for one query: keep the feed for 30 minutes
+@RemoteQuery(PostsKey.list, gcTime: 1800, loader: { try await API.shared.fetchPosts() })
+private var posts
+```
+
+When several views observe a key with different values, the longest wins. Pass
+`.infinity` to never remove a value. Values written with `setQueryData` or the `seed:`
+initializer count from when they are written, as if no view had observed them.
+
 ### Pagination
 
 `@RemoteInfiniteQuery` loads a list page by page. Give it the first page's parameter, a

@@ -41,6 +41,7 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
         client: any QueryClientProtocol,
         key: any QueryKey,
         staleTime: TimeInterval,
+        gcTime: TimeInterval? = nil,
         initialPageParam: PageParam,
         getNextPageParam: @escaping NextPageParam,
         pageLoader: @escaping PageLoader
@@ -49,7 +50,7 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable & E
         self.getNextPageParam = getNextPageParam
         self.pageLoader = pageLoader
 
-        super.configure(client: client, key: key, staleTime: staleTime) { @MainActor [weak self] in
+        super.configure(client: client, key: key, staleTime: staleTime, gcTime: gcTime) { @MainActor [weak self] in
             guard let self else { throw CancellationError() }
 
             return try await loadPages()

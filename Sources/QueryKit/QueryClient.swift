@@ -16,15 +16,24 @@ public actor QueryClient: QueryClientProtocol {
     private var runningTasks: [AnyHashable: Task<any Sendable, Error>] = [:]
     private let overrideStaleTime: TimeInterval?
 
+    private let defaultGCTime: TimeInterval
+    /// The longest `gcTime` any observer of each key asked for since the key was last evicted.
+    private var gcTimes: [AnyHashable: TimeInterval] = [:]
+    private var gcTasks: [AnyHashable: Task<Void, Never>] = [:]
+
     public static let shared = QueryClient()
 
     /// Creates a new ``QueryClient`` instance.
     ///
+    /// - Parameter defaultGCTime: How long, in seconds, a cached value is kept once no
+    ///   query observes its key. A query can ask for longer with its own `gcTime`.
+    ///   Pass `.infinity` to never evict.
     /// - Parameter overrideStaleTime: An optional time interval that, if provided,
     ///   will override the stale time for all entries in this client. This is
     ///   useful for testing scenarios where you want to control cache expiration.
     ///   If `nil`, the stale time specified in each query will be used.
-    public init(overrideStaleTime: TimeInterval? = nil) {
+    public init(defaultGCTime: TimeInterval = 300, overrideStaleTime: TimeInterval? = nil) {
+        self.defaultGCTime = defaultGCTime
         self.overrideStaleTime = overrideStaleTime
     }
 
@@ -40,12 +49,22 @@ public actor QueryClient: QueryClientProtocol {
     ///   will override the stale time for all entries in this client. This is
     ///   useful for testing scenarios where you want to control cache expiration.
     ///   If `nil`, the stale time specified in each query will be used.
-    public init<K: QueryKey>(seed: [K: any Sendable], overrideStaleTime: TimeInterval? = nil) {
+    /// - Parameter defaultGCTime: How long, in seconds, a cached value is kept once no
+    ///   query observes its key. Seeded values count from creation.
+    public init<K: QueryKey>(
+        seed: [K: any Sendable],
+        defaultGCTime: TimeInterval = 300,
+        overrideStaleTime: TimeInterval? = nil
+    ) {
         for (key, value) in seed {
             cache[AnyHashable(key)] = AnyCacheEntry(value: value, timestamp: Date())
         }
 
+        self.defaultGCTime = defaultGCTime
         self.overrideStaleTime = overrideStaleTime
+
+        let keys = Array(seed.keys)
+        Task { await self.scheduleGC(for: keys) }
     }
 
     public func fetch<Value: Sendable>(
@@ -88,8 +107,7 @@ public actor QueryClient: QueryClientProtocol {
 
         do {
             let result = try await task.value as! Value
-            cache[key] = AnyCacheEntry(value: result, timestamp: Date())
-            await notify(key: key, value: result)
+            await write(result, for: key)
             return result
         } catch {
             throw error
@@ -130,10 +148,20 @@ public actor QueryClient: QueryClientProtocol {
 }
 
 extension QueryClient {
-    func subscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
+    func subscribe<Value: Sendable>(
+        key: some QueryKey,
+        observer: QueryObserver<Value>,
+        gcTime: TimeInterval?
+    ) async {
         let hash = AnyHashable(key)
         let box = WeakBox(observer: observer)
         observers[hash, default: []].append(box)
+
+        if let gcTime {
+            gcTimes[hash] = max(gcTimes[hash] ?? 0, gcTime)
+        }
+
+        gcTasks.removeValue(forKey: hash)?.cancel()
     }
 
     func unsubscribe<Value: Sendable>(key: some QueryKey, observer: QueryObserver<Value>) async {
@@ -141,6 +169,51 @@ extension QueryClient {
         observers[hash] = observers[hash]?.filter {
             $0.observer !== observer && $0.observer != nil
         }
+
+        scheduleGC(for: [hash])
+    }
+
+    /// Called from an observer's `deinit`, when its weak box has already been zeroed.
+    func observerDidLeave(key: any QueryKey) {
+        scheduleGC(for: [AnyHashable(key)])
+    }
+}
+
+extension QueryClient {
+    private func scheduleGC(for keys: [some QueryKey]) {
+        scheduleGC(for: keys.map(AnyHashable.init))
+    }
+
+    /// Starts the eviction timer for each key that is cached and has no live observer.
+    private func scheduleGC(for keys: [AnyHashable]) {
+        for key in keys {
+            observers[key] = observers[key]?.filter { $0.observer != nil }
+
+            guard cache[key] != nil,
+                  observers[key]?.isEmpty ?? true else { continue }
+
+            let gcTime = gcTimes[key] ?? defaultGCTime
+            guard gcTime.isFinite else { continue }
+
+            gcTasks[key]?.cancel()
+            gcTasks[key] = Task {
+                try? await Task.sleep(for: .seconds(gcTime))
+                guard !Task.isCancelled else { return }
+                self.evict(key)
+            }
+        }
+    }
+
+    private func evict(_ key: AnyHashable) {
+        gcTasks[key] = nil
+        observers[key] = observers[key]?.filter { $0.observer != nil }
+
+        // An observer may have arrived after the timer fired but before this ran.
+        guard observers[key]?.isEmpty ?? true else { return }
+
+        cache.removeValue(forKey: key)
+        gcTimes.removeValue(forKey: key)
+        observers.removeValue(forKey: key)
     }
 }
 
@@ -198,6 +271,7 @@ extension QueryClient {
     private func write(_ value: any Sendable, for key: AnyHashable) async {
         cache[key] = AnyCacheEntry(value: value, timestamp: Date())
         await notify(key: key, value: value)
+        scheduleGC(for: [key])
     }
 }
 
