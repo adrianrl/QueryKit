@@ -31,3 +31,10 @@ private struct CacheLifetimeExamples: View {
 
     var body: some View { Text("\(posts?.count ?? 0)") }
 }
+
+// `@Mutation` infers `Void`; the explicit spelling from 0.4.0 must keep compiling.
+private struct ExplicitVoidMutation: View {
+    @Mutation<Void> private var deletePost
+
+    var body: some View { Button("Delete") {}.disabled(deletePost.isLoading) }
+}

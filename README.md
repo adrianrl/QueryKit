@@ -267,12 +267,17 @@ footer spinner without the list looking like it is refreshing.
 ### Mutations
 
 Use `@Mutation` to perform write operations. Its type parameter is the result of the
-operation, so a mutation that returns nothing is `@Mutation<Void>`:
+operation: write `@Mutation<Post>` for one that returns a post, and plain `@Mutation`
+for one that returns nothing.
+
+Unlike `@RemoteQuery`, there is no `$`: a query's variable is the data you display and
+`$` is its observer, but a mutation is an action with no data of its own, so the
+variable is the observer itself.
 
 ```swift
 struct PostDetailView: View {
     @Environment(\.api) private var api
-    @Mutation<Void> private var deletePost
+    @Mutation private var deletePost
 
     let post: Post
 
