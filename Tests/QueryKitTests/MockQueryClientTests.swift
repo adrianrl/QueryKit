@@ -57,4 +57,36 @@ struct MockQueryClientTests {
 
         #expect(query.error is TestError)
     }
+
+    @Test("fetchNextPage never calls the page loader in a preview")
+    @MainActor
+    func testFetchNextPageDoesNotLoad() async {
+        final class Calls: @unchecked Sendable { var count = 0 }
+        let calls = Calls()
+        let mock = MockQueryClient().stub(
+            TestKey.posts,
+            phase: .success(InfiniteData<[String], Int>(pages: [["1"]], pageParams: [1]))
+        )
+        let list = InfiniteQueryObserver<[String], Int>()
+        list.configure(
+            client: mock,
+            key: TestKey.posts,
+            staleTime: nil,
+            initialPageParam: 1,
+            getNextPageParam: { _, _, last in last + 1 },
+            pageLoader: { page in
+                calls.count += 1
+                return ["\(page)"]
+            }
+        )
+        await list.fetch()
+        #expect(list.hasNextPage)
+
+        let next = Task { await list.fetchNextPage() }
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(calls.count == 0)
+        #expect(list.phase.value?.pages == [["1"]])
+        next.cancel()
+    }
 }

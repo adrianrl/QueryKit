@@ -69,6 +69,26 @@ struct InfiniteQueryObserverTests {
         #expect(observer.phase.value == InfiniteData(pages: [["1"], ["2"]], pageParams: [1, 2]))
     }
 
+    @Test("Two observers of one list share a single next-page load")
+    func sharedNextPage() async {
+        let client = QueryClient()
+        let pages = Pages()
+        pages.delay[2] = .milliseconds(50)
+        let first = pages.makeObserver(client: client)
+        let second = pages.makeObserver(client: client)
+        for _ in 0..<5 { await Task.yield() }
+        await first.fetch()
+        await second.fetch()
+
+        async let a: Void = first.fetchNextPage()
+        async let b: Void = second.fetchNextPage()
+        _ = await (a, b)
+
+        #expect(pages.loaded.filter { $0 == 2 }.count == 1)
+        #expect(first.phase.value?.pages == [["1"], ["2"]])
+        #expect(second.phase.value?.pages == [["1"], ["2"]])
+    }
+
     @Test("fetchNextPage appends until getNextPageParam returns nil")
     func fetchNextPage() async {
         let pages = Pages()

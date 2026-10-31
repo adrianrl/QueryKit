@@ -11,6 +11,7 @@ import Foundation
 /// A mutation's `updating:` changes are applied to `.success` values and shown in every view
 /// observing that key, so a preview reflects an optimistic delete or edit. `invalidate:` and
 /// ``invalidateAll()`` are ignored: refetching would bring back the stubbed value.
+/// ``InfiniteQueryObserver/fetchNextPage()`` stays loading, since only the stubbed pages exist.
 ///
 /// Use the ``View/queryPreview(_:phase:)`` modifier for a convenient SwiftUI integration.
 public final class MockQueryClient: QueryClientProtocol, @unchecked Sendable {
